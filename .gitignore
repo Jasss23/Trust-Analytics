@@ -6,7 +6,9 @@ var/
 *.sqlite3
 *.db
 *.log
+!outputs/sample/*.log
 logs/
+*.egg-info/
 
 __pycache__/
 *.py[cod]
@@ -19,4 +21,3 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
-

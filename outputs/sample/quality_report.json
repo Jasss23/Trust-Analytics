@@ -1,0 +1,201 @@
+[
+  {
+    "cross_checks": [
+      {
+        "evidence": [
+          "crypto: fct=18266056774.0, biz=18266056774.0, ops=20713210819.0",
+          "fx: fct=4200105434.0, biz=4200105434.0, ops=4616334573.0",
+          "gold: fct=7726000162.0, biz=7726000162.0, ops=8565045433.0",
+          "gss: fct=6079313037.0, biz=6079313037.0, ops=6698913201.0",
+          "options: fct=1868303555.0, biz=1868303555.0, ops=2124534665.0"
+        ],
+        "name": "fct_vs_biz_october_gtv_by_asset",
+        "status": "pass"
+      },
+      {
+        "evidence": [
+          "crypto: fct=18266056774.0, biz=18266056774.0, ops=20713210819.0",
+          "fx: fct=4200105434.0, biz=4200105434.0, ops=4616334573.0",
+          "gold: fct=7726000162.0, biz=7726000162.0, ops=8565045433.0",
+          "gss: fct=6079313037.0, biz=6079313037.0, ops=6698913201.0",
+          "options: fct=1868303555.0, biz=1868303555.0, ops=2124534665.0"
+        ],
+        "name": "ops_vs_biz_october_gtv_by_asset",
+        "status": "warn"
+      }
+    ],
+    "flags": [
+      {
+        "code": "ops_source_disagrees",
+        "evidence": [
+          "crypto: fct=18266056774.0, biz=18266056774.0, ops=20713210819.0",
+          "fx: fct=4200105434.0, biz=4200105434.0, ops=4616334573.0",
+          "gold: fct=7726000162.0, biz=7726000162.0, ops=8565045433.0",
+          "gss: fct=6079313037.0, biz=6079313037.0, ops=6698913201.0",
+          "options: fct=1868303555.0, biz=1868303555.0, ops=2124534665.0"
+        ],
+        "known_issue": "Ops dashboard GTV differs from the completed-transaction business mart.",
+        "severity": "info"
+      }
+    ],
+    "hypotheses": [
+      {
+        "evidence": [
+          "mart_ops_dashboard.sql filters status != 'failed'; fct_trading_daily.sql filters status = 'completed'."
+        ],
+        "flag_code": "ops_source_disagrees",
+        "suspected_cause": "The Ops mart includes status != 'failed', while the canonical GTV definition uses completed transactions only."
+      }
+    ],
+    "question_id": "q1_gtv_idr_by_asset_oct_2025",
+    "summary": "1 quality flag(s) found. Hypotheses are included only where evidence exists."
+  },
+  {
+    "cross_checks": [
+      {
+        "evidence": [
+          "fct_usd=2339863.74, biz_usd=2339863.74, ops_usd=2847869.25"
+        ],
+        "name": "fct_vs_biz_october_gtv_usd",
+        "status": "pass"
+      },
+      {
+        "evidence": [
+          "fct_usd=2339863.74, biz_usd=2339863.74, ops_usd=2847869.25"
+        ],
+        "name": "ops_vs_biz_october_gtv_usd",
+        "status": "warn"
+      }
+    ],
+    "flags": [
+      {
+        "code": "ops_usd_definition_conflict",
+        "evidence": [
+          "fct_usd=2339863.74, biz_usd=2339863.74, ops_usd=2847869.25"
+        ],
+        "known_issue": "Ops USD GTV materially differs from the recorded-USD business definition.",
+        "severity": "warning"
+      }
+    ],
+    "hypotheses": [
+      {
+        "evidence": [
+          "mart_ops_dashboard.sql uses ROUND(SUM(amount_idr) / 15000, 2) and status != 'failed'."
+        ],
+        "flag_code": "ops_usd_definition_conflict",
+        "suspected_cause": "Ops converts IDR with a fixed 15000 rate and includes non-failed transactions; the business definition sums recorded amount_usd for completed transactions."
+      }
+    ],
+    "question_id": "q2_gtv_usd_oct_2025",
+    "summary": "1 quality flag(s) found. Hypotheses are included only where evidence exists."
+  },
+  {
+    "cross_checks": [
+      {
+        "evidence": [
+          "business_mtu=12453, raw_completed_unique_traders=9239, mixpanel_mtu=8882"
+        ],
+        "name": "mtu_source_comparison",
+        "status": "warn"
+      }
+    ],
+    "flags": [
+      {
+        "code": "mtu_definition_ambiguous",
+        "evidence": [
+          "business_mtu=12453, raw_completed_unique_traders=9239, mixpanel_mtu=8882"
+        ],
+        "known_issue": "Available MTU-like sources disagree and represent different definitions.",
+        "severity": "warning"
+      }
+    ],
+    "hypotheses": [
+      {
+        "evidence": [
+          "agg_monthly_biz_summary.mtu is populated only on Total rows.",
+          "stg_mixpanel_events is client-side and delivery is not guaranteed."
+        ],
+        "flag_code": "mtu_definition_ambiguous",
+        "suspected_cause": "The business summary uses an AUM-derived monthly definition, raw transactions count completed traders, and Ops uses client-side Mixpanel events."
+      }
+    ],
+    "question_id": "q3_mtu_oct_2025",
+    "summary": "1 quality flag(s) found. Hypotheses are included only where evidence exists."
+  },
+  {
+    "cross_checks": [
+      {
+        "evidence": [
+          "crypto: biz_completed=12732, ops_non_failed=14310",
+          "fx: biz_completed=2595, ops_non_failed=2889",
+          "gold: biz_completed=5096, ops_non_failed=5691",
+          "gss: biz_completed=3857, ops_non_failed=4299",
+          "options: biz_completed=1223, ops_non_failed=1379"
+        ],
+        "name": "biz_vs_ops_october_transaction_count",
+        "status": "warn"
+      }
+    ],
+    "flags": [
+      {
+        "code": "ops_transaction_definition_conflict",
+        "evidence": [
+          "crypto: biz_completed=12732, ops_non_failed=14310",
+          "fx: biz_completed=2595, ops_non_failed=2889",
+          "gold: biz_completed=5096, ops_non_failed=5691",
+          "gss: biz_completed=3857, ops_non_failed=4299",
+          "options: biz_completed=1223, ops_non_failed=1379"
+        ],
+        "known_issue": "Ops transaction counts are higher than completed-transaction counts.",
+        "severity": "info"
+      }
+    ],
+    "hypotheses": [
+      {
+        "evidence": [
+          "mart_ops_dashboard.sql uses status != 'failed'."
+        ],
+        "flag_code": "ops_transaction_definition_conflict",
+        "suspected_cause": "Ops includes pending transactions by filtering only failed transactions out."
+      }
+    ],
+    "question_id": "q4_transaction_count_by_asset_oct_2025",
+    "summary": "1 quality flag(s) found. Hypotheses are included only where evidence exists."
+  },
+  {
+    "cross_checks": [
+      {
+        "evidence": [
+          "2025-10: fct=38139778962.0, biz=38139778962.0, ops=42718038691.0",
+          "2025-11: fct=38704082670.0, biz=38704082670.0, ops=43342160400.0",
+          "2025-12: fct=38604717992.0, biz=37268719996.0, ops=42837125077.0"
+        ],
+        "name": "monthly_trend_source_comparison",
+        "status": "fail"
+      }
+    ],
+    "flags": [
+      {
+        "code": "monthly_biz_summary_disagrees_with_fct",
+        "evidence": [
+          "2025-10: fct=38139778962.0, biz=38139778962.0, ops=42718038691.0",
+          "2025-11: fct=38704082670.0, biz=38704082670.0, ops=43342160400.0",
+          "2025-12: fct=38604717992.0, biz=37268719996.0, ops=42837125077.0"
+        ],
+        "known_issue": "The monthly business summary Total row disagrees with the fct_trading_daily source for at least one month.",
+        "severity": "critical"
+      }
+    ],
+    "hypotheses": [
+      {
+        "evidence": [
+          "Disagreeing month(s): 2025-12"
+        ],
+        "flag_code": "monthly_biz_summary_disagrees_with_fct",
+        "suspected_cause": "The December Total row in agg_monthly_biz_summary appears stale or incorrectly aggregated compared with its asset rows and fct_trading_daily."
+      }
+    ],
+    "question_id": "q5_gtv_mom_trend_oct_dec_2025",
+    "summary": "1 quality flag(s) found. Hypotheses are included only where evidence exists."
+  }
+]

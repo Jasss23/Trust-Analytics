@@ -3,7 +3,6 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -34,4 +33,3 @@ def test_local_secret_files_are_gitignored() -> None:
 
     for pattern in [".env", ".venv/", "data/", "var/", "*.sqlite", "*.db"]:
         assert pattern in gitignore
-
