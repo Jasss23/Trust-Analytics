@@ -74,25 +74,34 @@ PLUANG_DB_PATH=var/pluang.sqlite
 Load data:
 
 ```bash
+pluang-agent setup
+```
+
+The CLI reads `.env` automatically. If you want to use shell variables in the command, export them first:
+
+```bash
+set -a
+source .env
+set +a
 pluang-agent setup --data-dir "$PLUANG_DATA_DIR" --db-path "$PLUANG_DB_PATH"
 ```
 
 Run approval demo:
 
 ```bash
-pluang-agent run --review-mode demo-approve --db-path "$PLUANG_DB_PATH" --data-dir "$PLUANG_DATA_DIR"
+pluang-agent run --review-mode demo-approve
 ```
 
 Run rejection/reinvestigation demo:
 
 ```bash
-pluang-agent run --review-mode demo-reject --db-path "$PLUANG_DB_PATH" --data-dir "$PLUANG_DATA_DIR"
+pluang-agent run --review-mode demo-reject
 ```
 
 Run interactive review:
 
 ```bash
-pluang-agent run --review-mode interactive --db-path "$PLUANG_DB_PATH" --data-dir "$PLUANG_DATA_DIR"
+pluang-agent run --review-mode interactive
 ```
 
 Check OpenRouter key credit:
@@ -170,4 +179,3 @@ The prototype is intentionally small. In production, the Quality Agent would sti
 - statistically plausible but business-impossible values.
 
 With more time, I would prioritize a richer semantic/lineage layer, metric certification, query provenance storage, historical anomaly baselines, and stronger reviewer UX for comparing conflicting sources side by side.
-

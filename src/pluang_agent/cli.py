@@ -8,21 +8,29 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from pluang_agent.agents.quality_agent import QualityAgent
-from pluang_agent.agents.sql_agent import SQLAgent
 from pluang_agent.config import load_settings
 from pluang_agent.data_loader import DataLoadError, load_csvs
-from pluang_agent.llm import LLMError, OpenRouterClient
-from pluang_agent.metadata import case_root_from_data_dir, load_dbt_metadata
 from pluang_agent.models import ReviewMode
-from pluang_agent.questions import REQUIRED_QUESTIONS
-from pluang_agent.workflow import run_pipeline, write_pipeline_outputs
 
 app = typer.Typer(
     help="Pluang multi-agent analytics reporting prototype.",
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _resolve_path_option(value: Path | None, fallback: Path) -> Path:
+    """Resolve CLI path options while tolerating empty shell-variable expansion.
+
+    Running `--data-dir "$PLUANG_DATA_DIR"` when the shell variable is unset passes
+    an empty string, which Typer normalizes to `Path(".")`. In that case, prefer
+    the value loaded from `.env`.
+    """
+    if value is None:
+        return fallback
+    if value == Path("."):
+        return fallback
+    return value
 
 
 @app.command()
@@ -40,8 +48,8 @@ def setup(
 ) -> None:
     """Prepare the local SQLite database from provided CSVs."""
     settings = load_settings()
-    resolved_data_dir = data_dir or settings.data_dir
-    resolved_db_path = db_path or settings.db_path
+    resolved_data_dir = _resolve_path_option(data_dir, settings.data_dir)
+    resolved_db_path = _resolve_path_option(db_path, settings.db_path)
     try:
         result = load_csvs(resolved_data_dir, resolved_db_path)
     except DataLoadError as exc:
@@ -85,9 +93,16 @@ def run(
     ),
 ) -> None:
     """Run the end-to-end agent pipeline."""
+    from pluang_agent.agents.quality_agent import QualityAgent
+    from pluang_agent.agents.sql_agent import SQLAgent
+    from pluang_agent.llm import OpenRouterClient
+    from pluang_agent.metadata import case_root_from_data_dir, load_dbt_metadata
+    from pluang_agent.questions import REQUIRED_QUESTIONS
+    from pluang_agent.workflow import run_pipeline, write_pipeline_outputs
+
     settings = load_settings()
-    resolved_db_path = db_path or settings.db_path
-    resolved_data_dir = data_dir or settings.data_dir
+    resolved_db_path = _resolve_path_option(db_path, settings.db_path)
+    resolved_data_dir = _resolve_path_option(data_dir, settings.data_dir)
     if not resolved_db_path.exists():
         raise typer.BadParameter(
             f"SQLite DB does not exist at {resolved_db_path}. Run `pluang-agent setup` first."
@@ -141,6 +156,8 @@ def review_demo(
 @app.command()
 def cost() -> None:
     """Report OpenRouter usage and remaining credit."""
+    from pluang_agent.llm import LLMError, OpenRouterClient
+
     settings = load_settings()
     client = OpenRouterClient(settings)
     try:
