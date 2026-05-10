@@ -316,16 +316,16 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Canonical source for completed-transaction GTV. Provides daily aggregates necessary for month-on-month analysis."
+      "why_chosen": "Canonical source for completed-transaction GTV. It provides daily aggregated data necessary for month-on-month analysis."
     },
     "sql": "SELECT substr(transaction_date, 1, 7) AS month, ROUND(SUM(CAST(gtv_idr AS REAL)), 2) AS gtv_idr, (ROUND(SUM(CAST(gtv_idr AS REAL)), 2) - LAG(ROUND(SUM(CAST(gtv_idr AS REAL)), 2)) OVER (ORDER BY substr(transaction_date, 1, 7))) AS mom_change, ROUND(100.0 * (ROUND(SUM(CAST(gtv_idr AS REAL)), 2) - LAG(ROUND(SUM(CAST(gtv_idr AS REAL)), 2)) OVER (ORDER BY substr(transaction_date, 1, 7))) / LAG(ROUND(SUM(CAST(gtv_idr AS REAL)), 2)) OVER (ORDER BY substr(transaction_date, 1, 7)), 2) AS mom_change_pct FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2026-01-01' GROUP BY month ORDER BY month",
     "system_error": null,
     "usage": {
-      "completion_tokens": 481,
+      "completion_tokens": 483,
       "cost": null,
       "model": "gpt-4o-mini",
       "prompt_tokens": 4122,
-      "total_tokens": 4603
+      "total_tokens": 4605
     },
     "warnings": []
   }

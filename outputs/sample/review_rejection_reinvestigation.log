@@ -4,26 +4,26 @@ Terminal summary: {'approved': 4, 'reinvestigated': 1}
 Question: q1_gtv_idr_by_asset_oct_2025
 Decision: approve
 Terminal state: approved
-Trust profile: GREEN (correctness=GREEN source=GREEN ambiguity=GREEN)
-QA summary: Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
+Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
+QA summary: Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher GTV reflects pending transactions being included via status != 'failed'.
 
 Question: q2_gtv_usd_oct_2025
 Decision: approve
 Terminal state: approved
-Trust profile: GREEN (correctness=GREEN source=GREEN ambiguity=GREEN)
-QA summary: Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
+Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
+QA summary: Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher GTV reflects the inclusion of pending transactions and a fixed IDR/USD conversion rate.
 
 Question: q3_mtu_oct_2025
 Decision: approve
 Terminal state: approved
-Trust profile: YELLOW (correctness=GREEN source=GREEN ambiguity=YELLOW)
-QA summary: 1 interpretation choice(s) made; Layer A clean.
+Trust profile: YELLOW (correctness=GREEN source=YELLOW ambiguity=YELLOW)
+QA summary: Layer A clean. Layer B: MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). Differences are by design, not data quality. Surfaced in interpretation_choices instead. 1 interpretation choice(s) declared.
 
 Question: q4_transaction_count_by_asset_oct_2025
 Decision: approve
 Terminal state: approved
-Trust profile: GREEN (correctness=GREEN source=GREEN ambiguity=GREEN)
-QA summary: Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
+Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
+QA summary: Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher transaction counts reflect pending transactions being included via status != 'failed'.
 
 Question: q5_gtv_mom_trend_oct_dec_2025
 Decision: reject
@@ -31,6 +31,6 @@ Category: source_wrong
 Note: Trend answer should be reinvestigated because the December business summary Total row disagrees with fct_trading_daily.
 Retry counts: {<ReviewCategory.SOURCE_WRONG: 'source_wrong'>: 1}
 Terminal state: reinvestigated
-Trust profile: GREEN (correctness=GREEN source=GREEN ambiguity=GREEN)
-QA summary: Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
-Reinvestigated trust profile: GREEN — Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
+Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
+QA summary: Layer A clean. Layer B: 2 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): The discrepancy in December 2025 values for agg_monthly_biz_summary is due to the known stale data issue affecting that month's total.
+Reinvestigated trust profile: RED — Layer A clean. Layer B: 2 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): The discrepancy in December 2025 values for agg_monthly_biz_summary is due to the known stale data issue.

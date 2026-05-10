@@ -29,20 +29,66 @@
       ]
     },
     "layer_b": {
-      "cross_source_findings": [],
-      "hypothesis": null,
-      "hypothesis_absence_note": "Generic Layer B (metrics.yml-driven cross-source reconciliation) is not implemented at R1. R3 will populate this layer.",
-      "verdict": "NOT_APPLICABLE"
+      "cross_source_findings": [
+        {
+          "delta_vs_primary": 0.0,
+          "notes": "Reference value for cross-source comparison.",
+          "source": "fct_trading_daily.gtv_idr (canonical primary)",
+          "value": {
+            "crypto": 18266056774.0,
+            "fx": 4200105434.0,
+            "gold": 7726000162.0,
+            "gss": 6079313037.0,
+            "options": 1868303555.0
+          }
+        },
+        {
+          "delta_vs_primary": 0.0,
+          "notes": "Monthly aggregate sourced from fct_trading_daily; should match exactly when summed by asset_class.",
+          "source": "agg_monthly_biz_summary.gtv_idr",
+          "value": {
+            "crypto": 18266056774.0,
+            "fx": 4200105434.0,
+            "gold": 7726000162.0,
+            "gss": 6079313037.0,
+            "options": 1868303555.0
+          }
+        },
+        {
+          "delta_vs_primary": 13.7146,
+          "notes": "Ops mart filters status != 'failed' (includes pending). Expected to be HIGHER than fct_trading_daily by ~10-15%.",
+          "source": "mart_ops_dashboard.gtv_idr",
+          "value": {
+            "crypto": 20713210819.0,
+            "fx": 4616334573.0,
+            "gold": 8565045433.0,
+            "gss": 6698913201.0,
+            "options": 2124534665.0
+          }
+        }
+      ],
+      "hypothesis": {
+        "confidence": "HIGH",
+        "evidence": [
+          "Ops note: 'filters status != failed (includes pending). Expected to be HIGHER by ~10-15%'",
+          "Observed ops delta = +13.7146%, within the expected 10-15% range",
+          "agg_monthly_biz_summary matches fct exactly (delta 0%), confirming fct is the canonical completed-transaction source"
+        ],
+        "proposal": "mart_ops_dashboard's higher GTV reflects pending transactions being included via status != 'failed'.",
+        "what_this_does_not_explain": "None \u2014 the per-source notes fully explain the observed pattern."
+      },
+      "hypothesis_absence_note": null,
+      "verdict": "DISAGREEMENT"
     },
     "layer_c": {
       "trust_profile": {
         "dimensions": {
           "ambiguity": "GREEN",
           "correctness": "GREEN",
-          "source_reliability": "GREEN"
+          "source_reliability": "RED"
         },
-        "overall": "GREEN",
-        "reviewer_summary": "Layer A clean. Layer B reconciliation not yet implemented (R1 stub)."
+        "overall": "RED",
+        "reviewer_summary": "Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher GTV reflects pending transactions being included via status != 'failed'."
       },
       "unresolved_questions": []
     },
@@ -78,20 +124,47 @@
       ]
     },
     "layer_b": {
-      "cross_source_findings": [],
-      "hypothesis": null,
-      "hypothesis_absence_note": "Generic Layer B (metrics.yml-driven cross-source reconciliation) is not implemented at R1. R3 will populate this layer.",
-      "verdict": "NOT_APPLICABLE"
+      "cross_source_findings": [
+        {
+          "delta_vs_primary": 0.0,
+          "notes": "Reference value for cross-source comparison.",
+          "source": "fct_trading_daily.gtv_usd (canonical primary)",
+          "value": 2339863.74
+        },
+        {
+          "delta_vs_primary": 0.0,
+          "notes": "Total row for the month; sourced from fct_trading_daily and should match exactly.",
+          "source": "agg_monthly_biz_summary.gtv_usd",
+          "value": 2339863.74
+        },
+        {
+          "delta_vs_primary": 21.7109,
+          "notes": "Uses fixed 15,000 IDR/USD conversion AND status != 'failed'. Expected to disagree by 15-25%.",
+          "source": "mart_ops_dashboard.gtv_usd_reported",
+          "value": 2847869.25
+        }
+      ],
+      "hypothesis": {
+        "confidence": "HIGH",
+        "evidence": [
+          "mart_ops_dashboard note: 'Uses fixed 15,000 IDR/USD conversion AND status != failed. Expected to disagree by 15-25%.",
+          "Observed ops delta = +21.71%, which is within the expected 15-25% range."
+        ],
+        "proposal": "mart_ops_dashboard's higher GTV reflects the inclusion of pending transactions and a fixed IDR/USD conversion rate.",
+        "what_this_does_not_explain": "None \u2014 the per-source notes fully explain the observed pattern."
+      },
+      "hypothesis_absence_note": null,
+      "verdict": "DISAGREEMENT"
     },
     "layer_c": {
       "trust_profile": {
         "dimensions": {
           "ambiguity": "GREEN",
           "correctness": "GREEN",
-          "source_reliability": "GREEN"
+          "source_reliability": "RED"
         },
-        "overall": "GREEN",
-        "reviewer_summary": "Layer A clean. Layer B reconciliation not yet implemented (R1 stub)."
+        "overall": "RED",
+        "reviewer_summary": "Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher GTV reflects the inclusion of pending transactions and a fixed IDR/USD conversion rate."
       },
       "unresolved_questions": []
     },
@@ -129,7 +202,7 @@
     "layer_b": {
       "cross_source_findings": [],
       "hypothesis": null,
-      "hypothesis_absence_note": "Generic Layer B (metrics.yml-driven cross-source reconciliation) is not implemented at R1. R3 will populate this layer.",
+      "hypothesis_absence_note": "MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). Differences are by design, not data quality. Surfaced in interpretation_choices instead.",
       "verdict": "NOT_APPLICABLE"
     },
     "layer_c": {
@@ -137,10 +210,10 @@
         "dimensions": {
           "ambiguity": "YELLOW",
           "correctness": "GREEN",
-          "source_reliability": "GREEN"
+          "source_reliability": "YELLOW"
         },
         "overall": "YELLOW",
-        "reviewer_summary": "1 interpretation choice(s) made; Layer A clean."
+        "reviewer_summary": "Layer A clean. Layer B: MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). Differences are by design, not data quality. Surfaced in interpretation_choices instead. 1 interpretation choice(s) declared."
       },
       "unresolved_questions": []
     },
@@ -176,20 +249,66 @@
       ]
     },
     "layer_b": {
-      "cross_source_findings": [],
-      "hypothesis": null,
-      "hypothesis_absence_note": "Generic Layer B (metrics.yml-driven cross-source reconciliation) is not implemented at R1. R3 will populate this layer.",
-      "verdict": "NOT_APPLICABLE"
+      "cross_source_findings": [
+        {
+          "delta_vs_primary": 0.0,
+          "notes": "Reference value for cross-source comparison.",
+          "source": "fct_trading_daily.transaction_count (canonical primary)",
+          "value": {
+            "crypto": 12732.0,
+            "fx": 2595.0,
+            "gold": 5096.0,
+            "gss": 3857.0,
+            "options": 1223.0
+          }
+        },
+        {
+          "delta_vs_primary": 0.0,
+          "notes": "Monthly aggregate sourced from fct_trading_daily; should match exactly.",
+          "source": "agg_monthly_biz_summary.transaction_count",
+          "value": {
+            "crypto": 12732.0,
+            "fx": 2595.0,
+            "gold": 5096.0,
+            "gss": 3857.0,
+            "options": 1223.0
+          }
+        },
+        {
+          "delta_vs_primary": 12.7555,
+          "notes": "Ops mart filters status != 'failed'. Expected to be HIGHER than fct_trading_daily by ~10-15%.",
+          "source": "mart_ops_dashboard.total_transactions",
+          "value": {
+            "crypto": 14310.0,
+            "fx": 2889.0,
+            "gold": 5691.0,
+            "gss": 4299.0,
+            "options": 1379.0
+          }
+        }
+      ],
+      "hypothesis": {
+        "confidence": "HIGH",
+        "evidence": [
+          "Ops note: 'filters status != failed'. Expected to be HIGHER by ~10-15%.",
+          "Observed ops delta = +12.7555%, within the expected 10-15% range.",
+          "agg_monthly_biz_summary matches fct exactly (delta 0%), confirming fct is the canonical completed-transaction source."
+        ],
+        "proposal": "mart_ops_dashboard's higher transaction counts reflect pending transactions being included via status != 'failed'.",
+        "what_this_does_not_explain": "None \u2014 the per-source notes fully explain the observed pattern."
+      },
+      "hypothesis_absence_note": null,
+      "verdict": "DISAGREEMENT"
     },
     "layer_c": {
       "trust_profile": {
         "dimensions": {
           "ambiguity": "GREEN",
           "correctness": "GREEN",
-          "source_reliability": "GREEN"
+          "source_reliability": "RED"
         },
-        "overall": "GREEN",
-        "reviewer_summary": "Layer A clean. Layer B reconciliation not yet implemented (R1 stub)."
+        "overall": "RED",
+        "reviewer_summary": "Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher transaction counts reflect pending transactions being included via status != 'failed'."
       },
       "unresolved_questions": []
     },
@@ -225,20 +344,49 @@
       ]
     },
     "layer_b": {
-      "cross_source_findings": [],
-      "hypothesis": null,
-      "hypothesis_absence_note": "Generic Layer B (metrics.yml-driven cross-source reconciliation) is not implemented at R1. R3 will populate this layer.",
-      "verdict": "NOT_APPLICABLE"
+      "cross_source_findings": [
+        {
+          "delta_vs_primary": 0.0,
+          "notes": "Reference value for cross-source comparison.",
+          "source": "fct_trading_daily.gtv_idr (canonical primary)",
+          "value": {
+            "2025-10": 38139778962.0,
+            "2025-11": 38704082670.0,
+            "2025-12": 38604717992.0
+          }
+        },
+        {
+          "delta_vs_primary": 3.4607,
+          "notes": "Monthly Total row sourced from fct_trading_daily. Known issue: December 2025 Total row appears stale/incorrect \u2014 disagrees with fct by ~3.5%.",
+          "source": "agg_monthly_biz_summary.gtv_idr",
+          "value": {
+            "2025-10": 38139778962.0,
+            "2025-11": 38704082670.0,
+            "2025-12": 37268719996.0
+          }
+        }
+      ],
+      "hypothesis": {
+        "confidence": "HIGH",
+        "evidence": [
+          "agg_monthly_biz_summary's December value is 37268719996.0, which is 3.4607% lower than fct_trading_daily's 38604717992.0.",
+          "Metric-level note states that the December 2025 Total row in agg_monthly_biz_summary is known stale."
+        ],
+        "proposal": "The discrepancy in December 2025 values for agg_monthly_biz_summary is due to the known stale data issue affecting that month's total.",
+        "what_this_does_not_explain": "None \u2014 the known stale data issue fully explains the observed pattern."
+      },
+      "hypothesis_absence_note": null,
+      "verdict": "DISAGREEMENT"
     },
     "layer_c": {
       "trust_profile": {
         "dimensions": {
           "ambiguity": "GREEN",
           "correctness": "GREEN",
-          "source_reliability": "GREEN"
+          "source_reliability": "RED"
         },
-        "overall": "GREEN",
-        "reviewer_summary": "Layer A clean. Layer B reconciliation not yet implemented (R1 stub)."
+        "overall": "RED",
+        "reviewer_summary": "Layer A clean. Layer B: 2 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): The discrepancy in December 2025 values for agg_monthly_biz_summary is due to the known stale data issue affecting that month's total."
       },
       "unresolved_questions": []
     },

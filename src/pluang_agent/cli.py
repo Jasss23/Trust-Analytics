@@ -92,6 +92,7 @@ def run(
     from pluang_agent.agents.sql_agent import SQLAgent
     from pluang_agent.llm import make_client
     from pluang_agent.metadata import case_root_from_data_dir, load_dbt_metadata
+    from pluang_agent.metrics import load_metrics_registry
     from pluang_agent.questions import REQUIRED_QUESTIONS
     from pluang_agent.workflow import run_pipeline, write_pipeline_outputs
 
@@ -110,13 +111,18 @@ def run(
         )
 
     metadata = load_dbt_metadata(case_root_from_data_dir(resolved_data_dir))
+    metrics_registry = load_metrics_registry()
     llm_client = make_client(settings)
     sql_agent = SQLAgent(
         db_path=resolved_db_path,
         metadata=metadata,
         llm_client=llm_client,
     )
-    quality_agent = QualityAgent(resolved_db_path)
+    quality_agent = QualityAgent(
+        db_path=resolved_db_path,
+        metrics_registry=metrics_registry,
+        llm_client=llm_client,
+    )
     result = run_pipeline(REQUIRED_QUESTIONS, sql_agent, quality_agent, review_mode)
     write_pipeline_outputs(result, output_dir)
 
