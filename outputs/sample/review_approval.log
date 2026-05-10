@@ -4,8 +4,8 @@ Terminal summary: {'approved': 5}
 Question: q1_gtv_idr_by_asset_oct_2025
 Decision: approve
 Terminal state: approved
-Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher GTV due to pending transactions included via status != 'failed', supported by a HIGH confidence hypothesis.
+Trust profile: RED (correctness=GREEN source=RED ambiguity=YELLOW)
+QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher GTV due to pending transactions included, with a HIGH confidence hypothesis explaining the discrepancy.
 
 Question: q2_gtv_usd_oct_2025
 Decision: approve
@@ -17,16 +17,16 @@ Question: q3_mtu_oct_2025
 Decision: approve
 Terminal state: approved
 Trust profile: YELLOW (correctness=GREEN source=YELLOW ambiguity=YELLOW)
-QA summary: Layer A is clean with all checks passing. Layer B's verdict is NOT APPLICABLE due to definitional differences in MTU, and there is 1 interpretation choice regarding the AUM-derived Total row.
+QA summary: Layer A is clean with all checks passing. Layer B's verdict is NOT APPLICABLE due to definitional differences in MTU, and there is 1 interpretation choice regarding the AUM-derived metric.
 
 Question: q4_transaction_count_by_asset_oct_2025
 Decision: approve
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=YELLOW)
-QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher transaction counts due to including pending transactions, while fct_trading_daily reflects only completed transactions. The LLM hypothesis (HIGH confidence) explains this discrepancy.
+QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher transaction counts due to pending transactions included, as per the hypothesis (HIGH confidence). There is 1 interpretation choice regarding the primary source for completed transactions.
 
 Question: q5_gtv_mom_trend_oct_dec_2025
 Decision: approve
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=YELLOW)
-QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 2 findings regarding December 2025 values; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting agg_monthly_biz_summary's total. There is 1 interpretation choice proposed.
+QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 2 findings — December 2025 values for agg_monthly_biz_summary disagree with fct_trading_daily by ~3.5%; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting that month's total. There is 1 interpretation choice proposed.

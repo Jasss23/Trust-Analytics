@@ -89,15 +89,15 @@
     "layer_c": {
       "trust_profile": {
         "dimensions": {
-          "ambiguity": "GREEN",
+          "ambiguity": "YELLOW",
           "correctness": "GREEN",
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher GTV due to pending transactions included via status != 'failed'. The LLM hypothesis has HIGH confidence and is supported by operational notes."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher GTV due to pending transactions included, with a HIGH confidence hypothesis explaining the discrepancy."
       },
       "unresolved_questions": [
-        "Determine which source is authoritative regarding the treatment of pending transactions in GTV calculations."
+        "Which source should be considered authoritative for the GTV figures: fct_trading_daily or mart_ops_dashboard?"
       ]
     },
     "question_id": "q1_gtv_idr_by_asset_oct_2025"
@@ -178,10 +178,10 @@
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher GTV due to pending transactions and a fixed conversion rate. There is 1 interpretation choice regarding the primary source for GTV."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the GTV figures from mart_ops_dashboard are higher due to pending transactions and a fixed conversion rate. There is 1 interpretation choice regarding the primary source for GTV."
       },
       "unresolved_questions": [
-        "Which source should be considered authoritative for the GTV figure: fct_trading_daily or mart_ops_dashboard?"
+        "Which source should be considered authoritative for the GTV figures, fct_trading_daily or mart_ops_dashboard?"
       ]
     },
     "question_id": "q2_gtv_usd_oct_2025"
@@ -235,7 +235,7 @@
           "source_reliability": "YELLOW"
         },
         "overall": "YELLOW",
-        "reviewer_summary": "Layer A is clean. Layer B verdict is NOT APPLICABLE due to definitional differences in MTU, with no hypothesis present. There is 1 interpretation choice regarding the AUM-derived Total row."
+        "reviewer_summary": "Layer A is clean with all checks passing. Layer B's verdict is NOT APPLICABLE due to definitional differences in MTU, and there is 1 interpretation choice regarding the AUM-derived metric."
       },
       "unresolved_questions": []
     },
@@ -336,7 +336,7 @@
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher transaction counts due to pending transactions included via status != 'failed'. The LLM hypothesis has HIGH confidence and is supported by evidence, but there is 1 interpretation choice present."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher transaction counts due to pending transactions included via status != 'failed'. The LLM hypothesis has HIGH confidence and is supported by evidence, but there is 1 interpretation choice regarding the primary source."
       },
       "unresolved_questions": [
         "Which source should be considered authoritative for the transaction counts: fct_trading_daily or mart_ops_dashboard?"
@@ -405,8 +405,8 @@
       "hypothesis": {
         "confidence": "HIGH",
         "evidence": [
-          "agg_monthly_biz_summary's December value is 37268719996.0, which is 3.4607% lower than fct_trading_daily's 38604717992.0.",
-          "Metric-level note states: 'December 2025 Total row in agg_monthly_biz_summary is known stale.'"
+          "agg_monthly_biz_summary shows a delta of +3.4607% for December 2025 compared to fct_trading_daily",
+          "The metric-level note states that the December 2025 Total row in agg_monthly_biz_summary is known to be stale."
         ],
         "proposal": "The discrepancy in December 2025 values for agg_monthly_biz_summary is due to the known stale data issue affecting that month's total.",
         "what_this_does_not_explain": "None \u2014 the known stale data issue fully explains the observed pattern."
@@ -422,10 +422,10 @@
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 2 findings regarding December 2025 values; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting agg_monthly_biz_summary's total. There is 1 interpretation choice proposed."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 2 findings regarding December 2025 values; the LLM hypothesis (HIGH confidence) suggests the discrepancy is due to the known stale data issue affecting that month's total. There is 1 interpretation choice proposed."
       },
       "unresolved_questions": [
-        "Confirm whether fct_trading_daily is the authoritative source for the December figure, given the stale data issue noted."
+        "Confirm if fct_trading_daily is the authoritative source for the December figure, given the stale data issue noted in agg_monthly_biz_summary."
       ]
     },
     "question_id": "q5_gtv_mom_trend_oct_dec_2025"

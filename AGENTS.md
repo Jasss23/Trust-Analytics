@@ -1,53 +1,86 @@
-# Pluang Analytics Agent Project Instructions
+# Pluang Analytics Agent — Project Instructions
 
-This repository is a take-home prototype for Pluang's Multi-Agent Analytics Reporting System. Keep the project small, runnable, and easy to review.
+This repository is the take-home submission for Pluang's Multi-Agent Analytics Reporting case study.
+
+The README describes the system; this file describes the engineering invariants it must keep.
+
+---
 
 ## Non-Negotiables
 
-- Never commit API keys, `.env`, `.venv/`, provided CSV data, SQLite databases, local logs, or generated caches.
-- Keep OpenRouter credentials environment-only. Use `OPENROUTER_API_KEY`; do not add fallback hardcoded keys.
-- Keep `data/` gitignored. The setup command should accept a local data directory supplied by the evaluator.
-- Preserve committed sample outputs once generated unless intentionally regenerating them after a behavior change.
-- Keep the CLI runnable throughout development. Prefer adding or updating tests before changing behavior.
-- Keep SQL execution read-only once the query layer exists.
-- Keep the README evaluator-facing. It may start as a scaffold, but before submission it must describe the final implemented system rather than only the plan.
-- Update the README whenever implementation or testing changes a design decision.
-- Include an honest "what did not work as expected and how it was handled" note before final submission.
+- Never commit API keys, `.env`, `.venv/`, the provided CSV data, SQLite databases, local working directories (`var/`), or generated logs (with one exception: `logs/cost.jsonl` is allow-listed because it is evaluator-visible evidence).
+- Keep OpenRouter credentials environment-only via `OPENROUTER_API_KEY`. Never add hardcoded fallbacks.
+- Keep `data/` gitignored. The setup command must accept a local data directory supplied at runtime.
+- SQL execution is read-only. The `sql_runner.execute_read_only` guard rejects DDL, DML, PRAGMA, and multi-statement SQL.
+- Do not silently fall back from the LLM path to deterministic answers. Hard errors (auth/quota/transient) escalate via `SystemError` → `AUDIT_REQUIRED(audit_reason='system_error')`. Soft errors (bad output / unsafe SQL) get one repair attempt, then escalate.
+- Both agents must remain independently testable and not share internal state. The Quality Agent only receives the SQL Agent's structured answer; it does not call back into the SQL Agent.
 
-## Planned Architecture
+---
 
-- SQL Agent: receives a business question, selects source context, generates SQL, executes against local SQLite, and records source/logic provenance.
-- Quality Agent: checks SQL Agent answers for deterministic data quality issues, cross-source disagreement, and grounded error hypotheses.
-- Human Review: pauses the pipeline, surfaces context-rich review items, and accepts approval or structured rejection.
-- LangGraph State Machine: orchestrates SQL Agent, Quality Agent, Human Review, one-time reinvestigation, and terminal states.
+## Architecture (current state)
 
-## Case Study Behavioral Requirements
+| Component | File | Role |
+|---|---|---|
+| SQL Agent | `agents/sql_agent.py` | LLM-driven; takes the registry entry + schema context; produces a `SQLAgentAnswer` with full source provenance. |
+| Quality Agent (orchestrator) | `agents/quality_agent.py` | Three-layer A→B→C orchestrator. |
+| Layer A (rules) | `quality_rules.py` | Null/zero/negative/empty/required-fields/plausibility checks. High precision over recall. |
+| Layer B (reconciliation) | `layer_b.py` | Rules execute the same metric across `metrics.yml` sources, compute deltas, decide AGREE/DISAGREEMENT/NOT_APPLICABLE. LLM proposes a *grounded* hypothesis on disagreement (must cite evidence; MAY return null). |
+| Layer C (composition) | `layer_c.py` | LLM composes the `TrustProfile` (dimensions + overall + reviewer_summary + unresolved_questions) from structured A+B output. Falls back to rule-based composer when LLM unavailable or output invalid. |
+| Workflow | `workflow.py` | LangGraph: answer → review → reinvestigate. Per-category retry-once. ESCALATED is folded into AUDIT_REQUIRED with `audit_reason`. AUDIT_REQUIRED ships an `AuditHandoff` package. |
+| Review | `review.py` | Rich-formatted interactive panel — Layer B findings table, full SQL with syntax highlighting, hypothesis panel, interpretation_choices, source provenance. Note coaching with category-specific defaults on rejection. Post-pipeline reinvestigation diff via `render_reinvestigation_diffs()`. |
+| LLM client | `llm.py` | OpenAI-compatible (OpenRouter target; OpenAI native works for dev). Typed errors, mock-mode (`PLUANG_LLM_MOCK=1`), cost log to `logs/cost.jsonl`. |
+| Metric registry | `metrics.yml` + `metrics.py` | Hand-curated entries with primary/alternatives/period/breakdown/aggregator/threshold/expected_min/max/notes_for_layer_b. WrenAI-MDL-inspired thin slice. |
+| Per-table warnings | `instructions.yml` + `metadata.py:load_instructions()` | Hand-curated YAML carrying `⚠️` warnings rendered into the schema context (Total-row, date format, status filter, canonical source). |
+| Schema context | `metadata.py:describe_schema_context()` | WrenAI-style `### Model: name — description` blocks with full dbt column descriptions inlined. |
+| Prompts | `prompts/*.md` | Process-driven, zero domain rule statements in the system prompt. |
 
-- The SQL Agent must always return a structured answer with metric value, period, source tables, filters, SQL, assumptions, and logic/provenance notes.
-- The SQL Agent must surface ambiguity when a question can be answered through multiple valid metric definitions or sources.
-- The Quality Agent must produce a quality report for every SQL Agent answer, even when no issues are found.
-- The Quality Agent must reliably flag nulls, suspicious zeros, negative values for always-positive metrics, empty results, missing required fields, and implausible results when detectable.
-- The Quality Agent must clearly separate known facts from suspected causes. Flags are known observations; hypotheses are only included when grounded in available data or source metadata.
-- The SQL Agent and Quality Agent must remain independently testable and must not rely on shared hidden state.
-- The human review step must be a real pause and decision point, not only a printout at the end of the run.
-- Sample outputs committed to `outputs/sample/` must include SQL Agent answers, Quality Agent report, approval flow, and rejection/reinvestigation flow.
-- Final README must cover architecture, context/prompt strategy, model choice, how to run, scaling, testing, cost, and limitations.
+---
+
+## Case Study Behavioral Requirements (kept honest)
+
+- The SQL Agent always returns a structured answer with `source.primary_table`, `source.why_chosen`, `source.alternatives_available`, `filters`, `assumptions`, `logic`, `sql`, `interpretation_choices`, `dq_notes`, and `usage` (when LLM ran).
+- The SQL Agent surfaces ambiguity via `interpretation_choices` when a metric has multiple valid definitions. MTU questions specifically surface all three (AUM-derived, raw completed traders, Mixpanel).
+- The Quality Agent produces a `QualityReport` for every answer, even clean ones (Layer A always runs; Layer B always runs, may return AGREE; Layer C always composes).
+- Layer A reliably flags nulls in required fields, suspicious zeros, negative values for always-positive metrics, empty results, and out-of-range values per `expected_min`/`expected_max`.
+- Layer B's hypothesis distinguishes what is *known* (the structured findings) from what is *suspected* (the LLM's grounded explanation, with confidence + `what_this_does_not_explain`).
+- The human review step is a real pause and decision point. The reviewer sees a structured panel; rejections require a category + free-form note; the category drives routing; the note carries semantic context for the next agent attempt but is never parsed for routing.
+- Sample outputs in `outputs/sample/` cover both approval and rejection-with-reinvestigation flows.
+
+---
 
 ## Reviewer Rejection Routing
 
-Reviewer rejections must include a category and free-form note:
+Reviewer rejections must include one of four categories plus a free-form note. The category drives routing; the note travels into the agent's next attempt as context (never parsed for routing).
 
-- `answer_wrong`: retry SQL Agent and Quality Agent once.
-- `source_wrong`: retry SQL Agent with source guidance and Quality Agent once.
-- `qa_insufficient`: retry Quality Agent once.
-- `external_disagreement`: do not retry; move to `audit_required`.
+| Category | Action |
+|---|---|
+| `answer_wrong` | Re-run SQL Agent with the reviewer note in context. |
+| `source_wrong` | Re-run SQL Agent with the reviewer note in context (typically: "use alternative source X"). |
+| `qa_insufficient` | Re-run Quality Agent (B + C) without changing the SQL Agent answer. |
+| `external_disagreement` | Do NOT retry. Route directly to `audit_required`. |
 
-Each item has a retry limit of one. After that, route to `audit_required`.
+Per-category retry limit = 1 (tracked on `ReviewDecision.per_category_retry_counts`). After the limit, the item routes to `audit_required` and an `AuditHandoff` package is emitted with all attempted answers, all reject notes, and Layer C's `unresolved_questions`.
+
+`audit_required` is a hand-off, not a failure. The package gives the human enough context to act outside the system.
+
+---
 
 ## Development Defaults
 
 - Python CLI package under `src/pluang_agent/`.
-- Tests under `tests/`.
-- Local runtime files under `var/`.
+- Tests under `tests/` — `pytest` runs without any API key (LLM calls use stub clients).
+- Local runtime files under `var/` (gitignored).
 - Committed sample artifacts under `outputs/sample/`.
-- Default model: `openai/gpt-4.1-mini`, overrideable with `OPENROUTER_MODEL`.
+- Default model: `openai/gpt-4.1-mini` on OpenRouter, overrideable via `OPENROUTER_MODEL`.
+- Mock fixtures in `tests/_fixtures/mock_llm/` (used by `PLUANG_LLM_MOCK=1` for interactive dev runs without an API key).
+- Cost log at `logs/cost.jsonl` (allow-listed in `.gitignore`).
+
+---
+
+## When Editing the System
+
+- **Adding a new question:** add an entry to `metrics.yml` (with `primary`, `alternatives`, `period_start/end`, `disagreement_threshold_pct`, optional `expected_min/max`); add it to `questions.REQUIRED_QUESTIONS`. No agent code changes.
+- **Onboarding a new dataset:** drop in dbt `_sources.yml` / `_models.yml`, write `metrics.yml`, write `instructions.yml`. No prompt or agent changes.
+- **Changing prompts:** edit `prompts/*.md`. The SQL Agent system prompt is intentionally domain-agnostic; new domain rules go in `instructions.yml` or `metrics.yml.notes_for_layer_b`, not in the prompt.
+- **Adding a Layer A check:** add a `_check_X(answer)` function in `quality_rules.py` and append to `run_layer_a()`. Keep checks high-precision — false positives at Layer A poison reviewer trust.
+- **Tightening Layer B reconciliation:** adjust `disagreement_threshold_pct` per metric, or add structured fields to `MetricEntry` and consume them in `layer_b._execute_source()`.

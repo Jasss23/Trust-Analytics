@@ -8,7 +8,16 @@
       "transaction_date in October 2025",
       "completed transactions only (baked into fct_trading_daily per its \u26a0\ufe0f warning)"
     ],
-    "interpretation_choices": [],
+    "interpretation_choices": [
+      {
+        "alternatives": [
+          "agg_monthly_biz_summary.gtv_idr (monthly aggregate, excludes Total row)",
+          "mart_ops_dashboard.gtv_idr (includes pending transactions)"
+        ],
+        "choice": "Primary = fct_trading_daily.gtv_idr (completed transactions only)",
+        "rationale": "fct_trading_daily is the canonical source for completed transactions, while the alternatives include pending transactions and may yield higher GTV."
+      }
+    ],
     "logic": "SUM(gtv_idr) across October 2025 grouped by asset_class from the daily fact mart.",
     "metric_name": "gtv_idr_by_asset_class",
     "metric_value": [
@@ -69,11 +78,11 @@
     "sql": "SELECT asset_class, ROUND(SUM(CAST(gtv_idr AS REAL)), 2) AS gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class ORDER BY asset_class",
     "system_error": null,
     "usage": {
-      "completion_tokens": 350,
+      "completion_tokens": 447,
       "cost": null,
       "model": "gpt-4o-mini",
       "prompt_tokens": 4463,
-      "total_tokens": 4813
+      "total_tokens": 4910
     },
     "warnings": []
   },
@@ -93,7 +102,7 @@
           "mart_ops_dashboard.gtv_usd_reported (includes pending transactions)"
         ],
         "choice": "Primary = fct_trading_daily.gtv_usd (completed transactions only)",
-        "rationale": "Primary source captures only completed transactions, while alternatives may include pending transactions and use different conversion methods."
+        "rationale": "Primary source captures only completed transactions, while alternatives may include pending transactions or use a fixed exchange rate."
       }
     ],
     "logic": "SUM(gtv_usd) across October 2025 from the daily fact mart.",
@@ -122,11 +131,11 @@
     "sql": "SELECT ROUND(SUM(CAST(gtv_usd AS REAL)), 2) AS total_gtv_usd FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'",
     "system_error": null,
     "usage": {
-      "completion_tokens": 415,
+      "completion_tokens": 416,
       "cost": null,
       "model": "gpt-4o-mini",
       "prompt_tokens": 4445,
-      "total_tokens": 4860
+      "total_tokens": 4861
     },
     "warnings": []
   },
@@ -155,8 +164,8 @@
     "metric_name": "monthly_transacting_users",
     "metric_value": [
       {
-        "aum_defined_mtu": 12453,
-        "mixpanel_mtu": 8882,
+        "aum_defined_mtu": "12453",
+        "mixpanel_mtu": "8882",
         "raw_completed_unique_traders": 9239
       }
     ],
@@ -165,8 +174,8 @@
     "question_id": "q3_mtu_oct_2025",
     "result_rows": [
       {
-        "aum_defined_mtu": 12453,
-        "mixpanel_mtu": 8882,
+        "aum_defined_mtu": "12453",
+        "mixpanel_mtu": "8882",
         "raw_completed_unique_traders": 9239
       }
     ],
@@ -178,14 +187,14 @@
       "primary_table": "agg_monthly_biz_summary",
       "why_chosen": "Registry's primary is agg_monthly_biz_summary.mtu (Total row). The notes_for_layer_b flags three valid definitions; per the ambiguity rule I surfaced all three in one query and populated interpretation_choices."
     },
-    "sql": "SELECT (SELECT CAST(mtu AS INTEGER) FROM agg_monthly_biz_summary WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS aum_defined_mtu, (SELECT COUNT(DISTINCT user_id) FROM raw_transactions WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' AND status = 'completed') AS raw_completed_unique_traders, (SELECT CAST(mtu_mixpanel AS INTEGER) FROM mart_ops_dashboard WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS mixpanel_mtu",
+    "sql": "SELECT (SELECT mtu FROM agg_monthly_biz_summary WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS aum_defined_mtu, (SELECT COUNT(DISTINCT user_id) FROM raw_transactions WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' AND status = 'completed') AS raw_completed_unique_traders, (SELECT mtu_mixpanel FROM mart_ops_dashboard WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS mixpanel_mtu",
     "system_error": null,
     "usage": {
-      "completion_tokens": 510,
+      "completion_tokens": 500,
       "cost": null,
       "model": "gpt-4o-mini",
       "prompt_tokens": 4479,
-      "total_tokens": 4989
+      "total_tokens": 4979
     },
     "warnings": []
   },
@@ -205,7 +214,7 @@
           "mart_ops_dashboard.total_transactions (includes pending transactions)"
         ],
         "choice": "Primary = fct_trading_daily.transaction_count (completed transactions only)",
-        "rationale": "fct_trading_daily provides the canonical completed transaction count, while the alternatives may include pending transactions or aggregate differently."
+        "rationale": "fct_trading_daily provides the canonical completed transaction count, while the alternatives include pending transactions and may report higher counts."
       }
     ],
     "logic": "SUM(transaction_count) across October 2025 grouped by asset_class from the daily fact mart.",
@@ -268,11 +277,11 @@
     "sql": "SELECT asset_class, SUM(transaction_count) AS transaction_count FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class ORDER BY asset_class",
     "system_error": null,
     "usage": {
-      "completion_tokens": 409,
+      "completion_tokens": 410,
       "cost": null,
       "model": "gpt-4o-mini",
       "prompt_tokens": 4436,
-      "total_tokens": 4845
+      "total_tokens": 4846
     },
     "warnings": []
   },
@@ -291,10 +300,10 @@
           "agg_monthly_biz_summary.gtv_idr (Total row)"
         ],
         "choice": "Primary = fct_trading_daily.gtv_idr",
-        "rationale": "fct_trading_daily is the canonical source for completed transactions, while agg_monthly_biz_summary has a known stale issue for December 2025."
+        "rationale": "fct_trading_daily is the canonical source for completed transactions, while agg_monthly_biz_summary's December 2025 Total row is known to be stale."
       }
     ],
-    "logic": "SUM(gtv_idr) across the months from October to December 2025 grouped by month.",
+    "logic": "SUM(gtv_idr) across October to December 2025 grouped by month from the daily fact mart.",
     "metric_name": "gtv_idr_month_on_month_trend",
     "metric_value": [
       {
@@ -337,11 +346,11 @@
     "sql": "SELECT strftime('%Y-%m', transaction_date) AS month_bucket, ROUND(SUM(CAST(gtv_idr AS REAL)), 2) AS gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2026-01-01' GROUP BY month_bucket ORDER BY month_bucket",
     "system_error": null,
     "usage": {
-      "completion_tokens": 451,
+      "completion_tokens": 455,
       "cost": null,
       "model": "gpt-4o-mini",
       "prompt_tokens": 4435,
-      "total_tokens": 4886
+      "total_tokens": 4890
     },
     "warnings": []
   }
