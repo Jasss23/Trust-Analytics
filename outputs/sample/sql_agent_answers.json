@@ -1,22 +1,38 @@
 [
   {
-    "ambiguity_notes": [],
     "assumptions": [
-      "Use the dbt daily trading mart as the canonical completed-transaction source."
+      "fct_trading_daily already filters status=completed."
     ],
+    "dq_notes": [],
     "filters": [
       "transaction_date in October 2025",
-      "completed transactions only"
+      "completed transactions only (baked into fct_trading_daily)"
     ],
-    "logic": "Sum gtv_idr across October 2025 by asset_class.",
+    "interpretation_choices": [],
+    "logic": "SUM(gtv_idr) across October 2025 grouped by asset_class from the daily fact mart.",
     "metric_name": "gtv_idr_by_asset_class",
-    "metric_value": {
-      "crypto": 18266056774.0,
-      "fx": 4200105434.0,
-      "gold": 7726000162.0,
-      "gss": 6079313037.0,
-      "options": 1868303555.0
-    },
+    "metric_value": [
+      {
+        "asset_class": "crypto",
+        "gtv_idr": 18266056774.0
+      },
+      {
+        "asset_class": "fx",
+        "gtv_idr": 4200105434.0
+      },
+      {
+        "asset_class": "gold",
+        "gtv_idr": 7726000162.0
+      },
+      {
+        "asset_class": "gss",
+        "gtv_idr": 6079313037.0
+      },
+      {
+        "asset_class": "options",
+        "gtv_idr": 1868303555.0
+      }
+    ],
     "period": "October 2025",
     "question": "What was total GTV (IDR) by asset class in October 2025?",
     "question_id": "q1_gtv_idr_by_asset_oct_2025",
@@ -42,26 +58,42 @@
         "gtv_idr": 1868303555.0
       }
     ],
-    "source_tables": [
-      "fct_trading_daily"
-    ],
-    "sql": "SELECT\n  asset_class,\n  ROUND(SUM(CAST(gtv_idr AS REAL)), 2) AS gtv_idr\nFROM fct_trading_daily\nWHERE transaction_date >= '2025-10-01'\n  AND transaction_date < '2025-11-01'\nGROUP BY asset_class\nORDER BY asset_class",
-    "usage": null,
+    "source": {
+      "alternatives_available": [
+        "agg_monthly_biz_summary",
+        "mart_ops_dashboard"
+      ],
+      "primary_table": "fct_trading_daily",
+      "why_chosen": "Canonical completed-transaction source. status=completed is baked in. agg_monthly_biz_summary is secondary."
+    },
+    "sql": "SELECT asset_class, ROUND(SUM(CAST(gtv_idr AS REAL)), 2) AS gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class ORDER BY asset_class",
+    "system_error": null,
+    "usage": {
+      "completion_tokens": 307,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4115,
+      "total_tokens": 4422
+    },
     "warnings": []
   },
   {
-    "ambiguity_notes": [],
     "assumptions": [
-      "Use recorded USD transaction values, not a conversion from IDR.",
-      "Use completed transactions only."
+      "fct_trading_daily already filters status=completed."
     ],
+    "dq_notes": [],
     "filters": [
       "transaction_date in October 2025",
-      "completed transactions only"
+      "completed transactions only (baked into fct_trading_daily)"
     ],
-    "logic": "Sum gtv_usd across all asset classes in October 2025.",
+    "interpretation_choices": [],
+    "logic": "SUM(gtv_usd) across October 2025 from the daily trading summary.",
     "metric_name": "total_gtv_usd",
-    "metric_value": 2339863.74,
+    "metric_value": [
+      {
+        "total_gtv_usd": 2339863.74
+      }
+    ],
     "period": "October 2025",
     "question": "What was total GTV (USD) in October 2025?",
     "question_id": "q2_gtv_usd_oct_2025",
@@ -70,32 +102,52 @@
         "total_gtv_usd": 2339863.74
       }
     ],
-    "source_tables": [
-      "fct_trading_daily"
-    ],
-    "sql": "SELECT\n  ROUND(SUM(CAST(gtv_usd AS REAL)), 2) AS total_gtv_usd\nFROM fct_trading_daily\nWHERE transaction_date >= '2025-10-01'\n  AND transaction_date < '2025-11-01'",
-    "usage": null,
+    "source": {
+      "alternatives_available": [],
+      "primary_table": "fct_trading_daily",
+      "why_chosen": "Canonical source for completed-transaction GTV in USD."
+    },
+    "sql": "SELECT ROUND(SUM(CAST(gtv_usd AS REAL)), 2) AS total_gtv_usd FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'",
+    "system_error": null,
+    "usage": {
+      "completion_tokens": 261,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4107,
+      "total_tokens": 4368
+    },
     "warnings": []
   },
   {
-    "ambiguity_notes": [
-      "MTU is ambiguous in the provided data: AUM-derived MTU, raw completed traders, and Mixpanel MTU differ."
-    ],
     "assumptions": [
-      "Primary MTU uses the business summary definition populated on the Total row.",
-      "Raw distinct completed traders and Mixpanel MTU are shown as alternate definitions."
+      "Three definitions of MTU exist and they differ \u2014 all three are surfaced."
+    ],
+    "dq_notes": [
+      "Mixpanel MTU is client-side and delivery is not guaranteed \u2014 lower bound estimate only."
     ],
     "filters": [
       "month = October 2025",
       "Total row for monthly marts"
     ],
-    "logic": "Read business-summary MTU and compare it to raw completed traders and Ops/Mixpanel MTU.",
+    "interpretation_choices": [
+      {
+        "alternatives": [
+          "raw completed unique traders",
+          "Mixpanel MTU (client-side, unreliable)"
+        ],
+        "choice": "Primary = agg_monthly_biz_summary.mtu (AUM-derived, Total row)",
+        "rationale": "Business summary MTU is the canonical dashboard metric. Raw and Mixpanel differ due to definition and collection method differences."
+      }
+    ],
+    "logic": "Return all three MTU definitions: business summary (AUM-derived), raw completed distinct traders, and Mixpanel client-side.",
     "metric_name": "monthly_transacting_users",
-    "metric_value": {
-      "mixpanel_mtu": 8882,
-      "primary_mtu_aum_defined": 12453,
-      "raw_completed_unique_traders": 9239
-    },
+    "metric_value": [
+      {
+        "aum_defined_mtu": 12453,
+        "mixpanel_mtu": 8882,
+        "raw_completed_unique_traders": 9239
+      }
+    ],
     "period": "October 2025",
     "question": "How many Monthly Transacting Users (MTU) were there in October 2025?",
     "question_id": "q3_mtu_oct_2025",
@@ -106,40 +158,45 @@
         "raw_completed_unique_traders": 9239
       }
     ],
-    "source_tables": [
-      "agg_monthly_biz_summary",
-      "raw_transactions",
-      "mart_ops_dashboard"
-    ],
-    "sql": "SELECT\n  (SELECT CAST(mtu AS INTEGER)\n   FROM agg_monthly_biz_summary\n   WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS aum_defined_mtu,\n  (SELECT COUNT(DISTINCT user_id)\n   FROM raw_transactions\n   WHERE transaction_date >= '2025-10-01'\n     AND transaction_date < '2025-11-01'\n     AND status = 'completed') AS raw_completed_unique_traders,\n  (SELECT CAST(mtu_mixpanel AS INTEGER)\n   FROM mart_ops_dashboard\n   WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS mixpanel_mtu",
-    "usage": null,
+    "source": {
+      "alternatives_available": [
+        "raw_transactions",
+        "mart_ops_dashboard"
+      ],
+      "primary_table": "agg_monthly_biz_summary",
+      "why_chosen": "Business summary MTU (Total row) is the canonical dashboard definition."
+    },
+    "sql": "SELECT (SELECT CAST(mtu AS INTEGER) FROM agg_monthly_biz_summary WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS aum_defined_mtu, (SELECT COUNT(DISTINCT user_id) FROM raw_transactions WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' AND status = 'completed') AS raw_completed_unique_traders, (SELECT CAST(mtu_mixpanel AS INTEGER) FROM mart_ops_dashboard WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS mixpanel_mtu",
+    "system_error": null,
+    "usage": {
+      "completion_tokens": 475,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4108,
+      "total_tokens": 4583
+    },
     "warnings": []
   },
   {
-    "ambiguity_notes": [],
     "assumptions": [
-      "Use completed transaction counts from the dbt daily trading mart."
+      "fct_trading_daily already filters status=completed."
     ],
+    "dq_notes": [],
     "filters": [
       "transaction_date in October 2025",
-      "completed transactions only"
+      "completed transactions only (baked into fct_trading_daily)"
     ],
-    "logic": "Sum transaction_count across October 2025 by asset_class and rank descending.",
+    "interpretation_choices": [],
+    "logic": "SUM(transaction_count) across October 2025 grouped by asset_class from the daily fact mart.",
     "metric_name": "transaction_count_by_asset_class",
-    "metric_value": {
-      "crypto": 12732,
-      "fx": 2595,
-      "gold": 5096,
-      "gss": 3857,
-      "options": 1223
-    },
-    "period": "October 2025",
-    "question": "How did transaction count compare across asset classes in October 2025?",
-    "question_id": "q4_transaction_count_by_asset_oct_2025",
-    "result_rows": [
+    "metric_value": [
       {
         "asset_class": "crypto",
         "transaction_count": 12732
+      },
+      {
+        "asset_class": "fx",
+        "transaction_count": 2595
       },
       {
         "asset_class": "gold",
@@ -150,48 +207,82 @@
         "transaction_count": 3857
       },
       {
+        "asset_class": "options",
+        "transaction_count": 1223
+      }
+    ],
+    "period": "October 2025",
+    "question": "How did transaction count compare across asset classes in October 2025?",
+    "question_id": "q4_transaction_count_by_asset_oct_2025",
+    "result_rows": [
+      {
+        "asset_class": "crypto",
+        "transaction_count": 12732
+      },
+      {
         "asset_class": "fx",
         "transaction_count": 2595
+      },
+      {
+        "asset_class": "gold",
+        "transaction_count": 5096
+      },
+      {
+        "asset_class": "gss",
+        "transaction_count": 3857
       },
       {
         "asset_class": "options",
         "transaction_count": 1223
       }
     ],
-    "source_tables": [
-      "fct_trading_daily"
-    ],
-    "sql": "SELECT\n  asset_class,\n  SUM(CAST(transaction_count AS INTEGER)) AS transaction_count\nFROM fct_trading_daily\nWHERE transaction_date >= '2025-10-01'\n  AND transaction_date < '2025-11-01'\nGROUP BY asset_class\nORDER BY transaction_count DESC",
-    "usage": null,
+    "source": {
+      "alternatives_available": [
+        "agg_monthly_biz_summary",
+        "mart_ops_dashboard"
+      ],
+      "primary_table": "fct_trading_daily",
+      "why_chosen": "Canonical completed-transaction source. status=completed is baked in."
+    },
+    "sql": "SELECT asset_class, SUM(transaction_count) AS transaction_count FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class ORDER BY asset_class",
+    "system_error": null,
+    "usage": {
+      "completion_tokens": 275,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4107,
+      "total_tokens": 4382
+    },
     "warnings": []
   },
   {
-    "ambiguity_notes": [],
     "assumptions": [
-      "Use IDR GTV as the trend metric unless currency is otherwise specified."
+      "fct_trading_daily already filters status=completed."
     ],
+    "dq_notes": [],
     "filters": [
-      "transaction_date from 2025-10-01 through 2025-12-31",
-      "completed transactions only"
+      "transaction_date from October 2025 to December 2025",
+      "completed transactions only (baked into fct_trading_daily)"
     ],
-    "logic": "Aggregate completed-transaction GTV by month and calculate month-on-month change.",
+    "interpretation_choices": [],
+    "logic": "SUM(gtv_idr) across the months of October to December 2025, calculating month-on-month changes using LAG() for comparison.",
     "metric_name": "gtv_idr_month_on_month_trend",
     "metric_value": [
       {
         "gtv_idr": 38139778962.0,
-        "mom_change_idr": null,
+        "mom_change": null,
         "mom_change_pct": null,
         "month": "2025-10"
       },
       {
         "gtv_idr": 38704082670.0,
-        "mom_change_idr": 564303708.0,
+        "mom_change": 564303708.0,
         "mom_change_pct": 1.48,
         "month": "2025-11"
       },
       {
         "gtv_idr": 38604717992.0,
-        "mom_change_idr": -99364678.0,
+        "mom_change": -99364678.0,
         "mom_change_pct": -0.26,
         "month": "2025-12"
       }
@@ -202,28 +293,40 @@
     "result_rows": [
       {
         "gtv_idr": 38139778962.0,
-        "mom_change_idr": null,
+        "mom_change": null,
         "mom_change_pct": null,
         "month": "2025-10"
       },
       {
         "gtv_idr": 38704082670.0,
-        "mom_change_idr": 564303708.0,
+        "mom_change": 564303708.0,
         "mom_change_pct": 1.48,
         "month": "2025-11"
       },
       {
         "gtv_idr": 38604717992.0,
-        "mom_change_idr": -99364678.0,
+        "mom_change": -99364678.0,
         "mom_change_pct": -0.26,
         "month": "2025-12"
       }
     ],
-    "source_tables": [
-      "fct_trading_daily"
-    ],
-    "sql": "WITH monthly AS (\n  SELECT\n    substr(transaction_date, 1, 7) AS month,\n    SUM(CAST(gtv_idr AS REAL)) AS gtv_idr\n  FROM fct_trading_daily\n  WHERE transaction_date >= '2025-10-01'\n    AND transaction_date < '2026-01-01'\n  GROUP BY 1\n)\nSELECT\n  month,\n  ROUND(gtv_idr, 2) AS gtv_idr,\n  ROUND(gtv_idr - LAG(gtv_idr) OVER (ORDER BY month), 2) AS mom_change_idr,\n  ROUND(\n    100.0 * (gtv_idr - LAG(gtv_idr) OVER (ORDER BY month))\n    / LAG(gtv_idr) OVER (ORDER BY month),\n    2\n  ) AS mom_change_pct\nFROM monthly\nORDER BY month",
-    "usage": null,
+    "source": {
+      "alternatives_available": [
+        "agg_monthly_biz_summary",
+        "mart_ops_dashboard"
+      ],
+      "primary_table": "fct_trading_daily",
+      "why_chosen": "Canonical source for completed-transaction GTV. Provides daily aggregates necessary for month-on-month analysis."
+    },
+    "sql": "SELECT substr(transaction_date, 1, 7) AS month, ROUND(SUM(CAST(gtv_idr AS REAL)), 2) AS gtv_idr, (ROUND(SUM(CAST(gtv_idr AS REAL)), 2) - LAG(ROUND(SUM(CAST(gtv_idr AS REAL)), 2)) OVER (ORDER BY substr(transaction_date, 1, 7))) AS mom_change, ROUND(100.0 * (ROUND(SUM(CAST(gtv_idr AS REAL)), 2) - LAG(ROUND(SUM(CAST(gtv_idr AS REAL)), 2)) OVER (ORDER BY substr(transaction_date, 1, 7))) / LAG(ROUND(SUM(CAST(gtv_idr AS REAL)), 2)) OVER (ORDER BY substr(transaction_date, 1, 7)), 2) AS mom_change_pct FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2026-01-01' GROUP BY month ORDER BY month",
+    "system_error": null,
+    "usage": {
+      "completion_tokens": 481,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4122,
+      "total_tokens": 4603
+    },
     "warnings": []
   }
 ]

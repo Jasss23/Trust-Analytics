@@ -1,12 +1,29 @@
-"""OpenRouter client wrapper."""
+"""LLM client wrapper with typed errors, mock mode, and cost logging.
+
+Per spec 3.5: a single wrapper handles mocking, retry, error normalization,
+and per-call cost logging. All LLM calls in the system go through this.
+
+Mock mode (PLUANG_LLM_MOCK=1) loads canned responses from
+tests/_fixtures/mock_llm/<stage_tag>.json so the pipeline can run end-to-end
+without a real key during dev. For unit tests, prefer injecting StubLLMClient
+directly — it's clearer and per-test scoped.
+
+Cost log: every real call appends one JSON line to logs/cost.jsonl with
+{ts, stage_tag, model, prompt_tokens, completion_tokens, total_tokens,
+cost_usd}. Tested independently of the LLM call.
+"""
 
 from __future__ import annotations
 
 import json
+import os
+import time
 import urllib.request
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Any, Protocol
 
+import openai
 from openai import OpenAI
 
 from pluang_agent.config import Settings
@@ -14,7 +31,45 @@ from pluang_agent.models import UsageRecord
 
 
 class LLMError(RuntimeError):
-    """Raised when the model call or model output fails."""
+    error_class: str = "llm_error"
+    suggested_action: str = "Investigate the LLM call before retrying."
+
+
+class LLMAuthError(LLMError):
+    error_class = "auth"
+    suggested_action = (
+        "Verify OPENROUTER_API_KEY is set and authorised for the configured "
+        "OPENROUTER_BASE_URL and OPENROUTER_MODEL."
+    )
+
+
+class LLMQuotaError(LLMError):
+    error_class = "quota"
+    suggested_action = (
+        "Add credit / lift the quota on the configured OPENROUTER_API_KEY, "
+        "or switch to a different provider key, then re-run."
+    )
+
+
+class LLMTransientError(LLMError):
+    error_class = "transient"
+    suggested_action = "Wait briefly and re-run; if the error persists, check upstream provider status."
+
+
+class LLMOutputError(LLMError):
+    error_class = "output"
+    suggested_action = (
+        "The model returned unusable content. Inspect the raw response; "
+        "consider a stricter schema instruction or a more capable model."
+    )
+
+
+SOFT_ERROR_TYPES: tuple[type[LLMError], ...] = (LLMOutputError,)
+HARD_ERROR_TYPES: tuple[type[LLMError], ...] = (
+    LLMAuthError,
+    LLMQuotaError,
+    LLMTransientError,
+)
 
 
 @dataclass(frozen=True)
@@ -23,34 +78,72 @@ class LLMResponse:
     usage: UsageRecord
 
 
+class LLMClient(Protocol):
+    """Anything the rest of the system needs from an LLM client.
+
+    Real (OpenRouterClient), mock (FixtureLLMClient), and stub (StubLLMClient
+    in tests) all conform to this protocol so agents accept any of them.
+    """
+
+    @property
+    def available(self) -> bool: ...
+
+    def chat_json(self, system: str, user: str, *, stage_tag: str = "") -> LLMResponse: ...
+
+
 class OpenRouterClient:
-    def __init__(self, settings: Settings):
+    """Real LLM client. Targets OpenAI-compatible endpoints (OpenRouter for
+    submission; OpenAI native for development)."""
+
+    def __init__(self, settings: Settings, cost_log_path: Path | None = None):
         self.settings = settings
+        self.cost_log_path = cost_log_path or Path("logs/cost.jsonl")
 
     @property
     def available(self) -> bool:
         return bool(self.settings.openrouter_api_key)
 
-    def chat_json(self, system: str, user: str) -> LLMResponse:
+    def chat_json(self, system: str, user: str, *, stage_tag: str = "") -> LLMResponse:
         if not self.settings.openrouter_api_key:
-            raise LLMError("OPENROUTER_API_KEY is not set.")
+            raise LLMAuthError("OPENROUTER_API_KEY is not set.")
 
         client = OpenAI(
             api_key=self.settings.openrouter_api_key,
             base_url=self.settings.openrouter_base_url,
         )
-        response = client.chat.completions.create(
-            model=self.settings.openrouter_model,
-            messages=[
+        kwargs: dict[str, Any] = {
+            "model": self.settings.openrouter_model,
+            "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            temperature=0,
-            extra_body={"usage": {"include": True}},
-        )
+            "temperature": 0,
+        }
+        if "openrouter" in self.settings.openrouter_base_url.lower():
+            kwargs["extra_body"] = {"usage": {"include": True}}
+
+        try:
+            response = client.chat.completions.create(**kwargs)
+        except openai.AuthenticationError as exc:
+            raise LLMAuthError(str(exc)) from exc
+        except openai.PermissionDeniedError as exc:
+            raise LLMAuthError(str(exc)) from exc
+        except openai.RateLimitError as exc:
+            raise LLMQuotaError(str(exc)) from exc
+        except openai.APITimeoutError as exc:
+            raise LLMTransientError(str(exc)) from exc
+        except openai.APIConnectionError as exc:
+            raise LLMTransientError(str(exc)) from exc
+        except openai.InternalServerError as exc:
+            raise LLMTransientError(str(exc)) from exc
+        except openai.BadRequestError as exc:
+            raise LLMOutputError(f"Bad request to model: {exc}") from exc
+        except openai.OpenAIError as exc:
+            raise LLMTransientError(f"Unexpected upstream error: {exc}") from exc
+
         message = response.choices[0].message.content
         if not message:
-            raise LLMError("Model returned an empty response.")
+            raise LLMOutputError("Model returned an empty response.")
 
         usage_data: dict[str, Any] = {}
         if response.usage is not None:
@@ -62,17 +155,82 @@ class OpenRouterClient:
             cost=_extract_cost(usage_data),
             model=self.settings.openrouter_model,
         )
+        append_cost_log(
+            self.cost_log_path,
+            stage_tag=stage_tag,
+            model=self.settings.openrouter_model,
+            usage=usage,
+        )
         return LLMResponse(content=message, usage=usage)
 
     def key_credit(self) -> dict[str, Any]:
         if not self.settings.openrouter_api_key:
-            raise LLMError("OPENROUTER_API_KEY is not set.")
+            raise LLMAuthError("OPENROUTER_API_KEY is not set.")
         request = urllib.request.Request(
             f"{self.settings.openrouter_base_url.rstrip('/')}/key",
             headers={"Authorization": f"Bearer {self.settings.openrouter_api_key}"},
         )
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))
+
+
+class FixtureLLMClient:
+    """Mock client for interactive dev runs (PLUANG_LLM_MOCK=1).
+
+    Loads canned responses from a fixtures directory keyed by stage_tag.
+    Each fixture file is a JSON document with `content` (the model's reply
+    text) and `usage` (UsageRecord-shaped dict). Missing fixtures raise
+    LLMOutputError so the caller's escalation path runs uniformly.
+    """
+
+    def __init__(self, fixtures_dir: Path):
+        self.fixtures_dir = fixtures_dir
+        self.available = True
+
+    def chat_json(self, system: str, user: str, *, stage_tag: str = "") -> LLMResponse:
+        # stage_tag is e.g. "sql_agent:q1_gtv_idr_by_asset_oct_2025"
+        slug = stage_tag.replace(":", "__") or "default"
+        path = self.fixtures_dir / f"{slug}.json"
+        if not path.is_file():
+            raise LLMOutputError(
+                f"No mock fixture for stage_tag={stage_tag} at {path}. "
+                f"Generate one or use PLUANG_LLM_MOCK=0 with a real key."
+            )
+        data = json.loads(path.read_text(encoding="utf-8"))
+        usage = UsageRecord.model_validate(data.get("usage") or {})
+        return LLMResponse(content=data["content"], usage=usage)
+
+
+def make_client(settings: Settings) -> LLMClient:
+    """Default client factory. Honors PLUANG_LLM_MOCK for interactive dev runs."""
+    if os.getenv("PLUANG_LLM_MOCK") == "1":
+        fixtures_dir = Path(
+            os.getenv("PLUANG_LLM_FIXTURES", "tests/_fixtures/mock_llm")
+        )
+        return FixtureLLMClient(fixtures_dir)
+    return OpenRouterClient(settings)
+
+
+def append_cost_log(
+    log_path: Path,
+    *,
+    stage_tag: str,
+    model: str,
+    usage: UsageRecord,
+) -> None:
+    """Append one JSONL record to the cost log. Idempotent on directory creation."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "stage_tag": stage_tag,
+        "model": model,
+        "prompt_tokens": usage.prompt_tokens,
+        "completion_tokens": usage.completion_tokens,
+        "total_tokens": usage.total_tokens,
+        "cost_usd": usage.cost,
+    }
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
 
 
 def _extract_cost(usage_data: dict[str, Any]) -> float | None:

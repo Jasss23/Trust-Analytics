@@ -1,0 +1,10 @@
+{
+  "content": "{\"question_id\": \"q1_gtv_idr_by_asset_oct_2025\", \"question\": \"What was total GTV (IDR) by asset class in October 2025?\", \"metric_name\": \"gtv_idr_by_asset_class\", \"metric_value\": null, \"period\": \"October 2025\", \"source\": {\"primary_table\": \"fct_trading_daily\", \"why_chosen\": \"Canonical completed-transaction source for gtv_idr. status=completed is already applied in the mart.\", \"alternatives_available\": [\"agg_monthly_biz_summary\", \"mart_ops_dashboard\"]}, \"sql\": \"SELECT asset_class, ROUND(SUM(CAST(gtv_idr AS REAL)), 2) AS gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class ORDER BY asset_class\", \"filters\": [\"transaction_date in October 2025\", \"completed transactions only (baked into fct_trading_daily)\"], \"assumptions\": [\"Use completed transactions. status=completed is already filtered by fct_trading_daily.\"], \"logic\": \"Sum gtv_idr across October 2025 by asset_class from the canonical daily trading mart.\", \"result_rows\": [], \"interpretation_choices\": [], \"dq_notes\": [], \"warnings\": []}",
+  "usage": {
+    "prompt_tokens": 1200,
+    "completion_tokens": 280,
+    "total_tokens": 1480,
+    "cost": 0.00032,
+    "model": "gpt-4o-mini"
+  }
+}

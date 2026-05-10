@@ -1,0 +1,56 @@
+# Metric registry — hand-curated for the take-home prototype.
+#
+# In production this would be sourced from dbt Semantic Layer / MetricFlow /
+# Cube / Wren MDL. Here it is hand-curated. Each entry powers:
+#   - SQL Agent: source priority + alternatives (grounded prompt context)
+#   - Quality Agent Layer B: cross-source reconciliation (R3)
+#
+# Schema (sketched at R1; consumed at R3):
+#
+# metrics:
+#   - id: <stable id, matches BusinessQuestion.id>
+#     metric_name: <short name>
+#     cross_source: required | optional | disabled   # Decision 5
+#     primary:
+#       table: <sqlite table name>
+#       column: <metric column>
+#       filters:                                     # SQL WHERE fragments
+#         - "<expr>"
+#       grain: daily | monthly | snapshot
+#     alternatives:
+#       - table: <sqlite table>
+#         column: <metric column on that table>
+#         filters:
+#           - "<expr>"
+#         notes: <why this is an alternative; observed differences>
+#     period_column:                                  # for cross-source SQL gen
+#       <table>: <date/month column>
+#     breakdown: <column or null>                     # e.g. asset_class, or null
+#     keywords:                                       # for question matching
+#       - <token>
+
+metrics:
+  - id: q1_gtv_idr_by_asset_oct_2025
+    metric_name: gtv_idr_by_asset_class
+    cross_source: required
+    primary:
+      table: fct_trading_daily
+      column: gtv_idr
+      filters: []                       # fct is already completed-only by upstream
+      grain: daily
+    alternatives:
+      - table: agg_monthly_biz_summary
+        column: gtv_idr
+        filters:
+          - "asset_class != 'Total'"
+        notes: "monthly aggregate; should match fct totals when summed by asset"
+      - table: mart_ops_dashboard
+        column: gtv_idr
+        filters: []
+        notes: "Ops mart filters status != 'failed' (includes pending) → expect higher numbers than fct"
+    period_column:
+      fct_trading_daily: transaction_date
+      agg_monthly_biz_summary: month
+      mart_ops_dashboard: month
+    breakdown: asset_class
+    keywords: [gtv, idr, asset, asset_class]

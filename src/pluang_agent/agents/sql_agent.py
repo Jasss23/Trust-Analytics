@@ -1,4 +1,15 @@
-"""Guarded SQL Agent."""
+"""SQL Agent — LLM-driven, prompts loaded from files (V6 compliance).
+
+Prompt engineering inspired by WrenAI's describe_schema() pattern:
+full column descriptions (not just names) are injected as context so the
+LLM can reason about source selection and date filters from business meaning,
+not column name inference.
+
+Error handling:
+- Hard errors (auth/quota/transient): escalate immediately via SystemError.
+- Soft errors (bad output/schema/SQL): one-shot repair attempt, then escalate.
+  No silent fallback to deterministic oracle — V5.
+"""
 
 from __future__ import annotations
 
@@ -8,17 +19,29 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from pluang_agent.baseline import answer_with_baseline
-from pluang_agent.db import connect, sqlite_schema_context
-from pluang_agent.llm import LLMError, OpenRouterClient
-from pluang_agent.metadata import DbtMetadata, compact_metadata_context, metric_hints
-from pluang_agent.models import BusinessQuestion, SQLAgentAnswer
+from pluang_agent.llm import (
+    HARD_ERROR_TYPES,
+    LLMError,
+    LLMOutputError,
+    OpenRouterClient,
+)
+from pluang_agent.metadata import DbtMetadata, describe_schema_context
+from pluang_agent.models import (
+    BusinessQuestion,
+    SQLAgentAnswer,
+    SystemError,
+)
 from pluang_agent.sql_runner import SQLSafetyError, execute_read_only
 
-SYSTEM_PROMPT = """You are a careful analytics SQL agent.
-Return only JSON matching the requested schema. Use source transparency.
-If metric definitions or sources are ambiguous, include ambiguity_notes instead of hiding the ambiguity.
-Use only read-only SQLite SELECT/WITH SQL."""
+_PROMPTS_DIR = Path(__file__).parents[3] / "prompts"
+
+
+def _load_system_prompt() -> str:
+    return (_PROMPTS_DIR / "sql_agent_system.md").read_text(encoding="utf-8")
+
+
+def _load_user_template() -> str:
+    return (_PROMPTS_DIR / "sql_agent_user.md").read_text(encoding="utf-8")
 
 
 class SQLAgent:
@@ -26,82 +49,204 @@ class SQLAgent:
         self,
         db_path: Path,
         metadata: DbtMetadata,
-        llm_client: OpenRouterClient | None = None,
-        prefer_llm: bool = False,
+        llm_client: OpenRouterClient,
     ):
         self.db_path = db_path
         self.metadata = metadata
         self.llm_client = llm_client
-        self.prefer_llm = prefer_llm
 
     def answer(
         self,
         question: BusinessQuestion,
         reviewer_note: str | None = None,
     ) -> SQLAgentAnswer:
-        if self.prefer_llm and self.llm_client and self.llm_client.available:
-            try:
-                return self._answer_with_llm(question, reviewer_note)
-            except (LLMError, SQLSafetyError, ValidationError, json.JSONDecodeError) as exc:
-                fallback = answer_with_baseline(self.db_path, question)
-                fallback.warnings.append(
-                    f"LLM path failed and deterministic fallback was used: {type(exc).__name__}: {exc}"
-                )
-                return fallback
-        return answer_with_baseline(self.db_path, question)
+        try:
+            return self._answer_with_llm(question, reviewer_note)
+        except HARD_ERROR_TYPES as exc:
+            return _escalate(question, exc)
+        except LLMError as exc:
+            return _escalate(question, exc)
 
     def _answer_with_llm(
         self,
         question: BusinessQuestion,
         reviewer_note: str | None,
     ) -> SQLAgentAnswer:
-        user_prompt = self._build_prompt(question, reviewer_note)
-        assert self.llm_client is not None
-        response = self.llm_client.chat_json(SYSTEM_PROMPT, user_prompt)
-        payload = _loads_json_object(response.content)
-        answer = SQLAgentAnswer.model_validate(payload)
-        answer.usage = response.usage
-        rows = execute_read_only(self.db_path, answer.sql)
+        system = _load_system_prompt()
+        user = self._build_user_prompt(question, reviewer_note)
+
+        # First attempt
+        try:
+            response = self.llm_client.chat_json(system, user, stage_tag=f"sql_agent:{question.id}")
+            payload = _loads_json_object(response.content)
+            payload = _adapt_payload(payload)
+            answer = SQLAgentAnswer.model_validate(payload)
+            answer.usage = response.usage
+        except (LLMOutputError, ValidationError, json.JSONDecodeError, SQLSafetyError) as exc:
+            # One-shot repair: feed the error + bad output back
+            answer = self._repair_attempt(question, reviewer_note, exc, system, user)
+            if answer.system_error is not None:
+                return answer  # repair also failed — escalate
+
+        # Execute the SQL
+        try:
+            rows = execute_read_only(self.db_path, answer.sql)
+        except SQLSafetyError as exc:
+            return _escalate_soft(question, exc)
         answer.result_rows = rows
-        if not answer.metric_value:
+        if answer.metric_value is None:
             answer.metric_value = rows
         return answer
 
-    def _build_prompt(self, question: BusinessQuestion, reviewer_note: str | None) -> str:
-        with connect(self.db_path) as conn:
-            sqlite_context = sqlite_schema_context(conn)
-        reviewer_context = f"\nReviewer note for retry: {reviewer_note}" if reviewer_note else ""
-        return f"""
-Business question:
-{question.text}
+    def _repair_attempt(
+        self,
+        question: BusinessQuestion,
+        reviewer_note: str | None,
+        original_exc: Exception,
+        system: str,
+        original_user: str,
+    ) -> SQLAgentAnswer:
+        """One-shot repair: append the error to the user prompt and retry once."""
+        error_summary = f"{type(original_exc).__name__}: {str(original_exc)[:400]}"
+        repair_user = (
+            original_user
+            + f"\n\n---\nPrevious attempt failed validation. Error: {error_summary}\n"
+            "Fix the JSON structure and return a valid response. "
+            "Ensure filters is a list of strings, interpretation_choices is a list of objects, "
+            "and warnings/dq_notes are lists.\n---"
+        )
+        try:
+            response = self.llm_client.chat_json(
+                system, repair_user, stage_tag=f"sql_agent_repair:{question.id}"
+            )
+            payload = _loads_json_object(response.content)
+            payload = _adapt_payload(payload)
+            answer = SQLAgentAnswer.model_validate(payload)
+            answer.usage = response.usage
+            answer.warnings.append(
+                f"First attempt failed ({type(original_exc).__name__}); repaired on second attempt."
+            )
+            return answer
+        except (LLMOutputError, ValidationError, json.JSONDecodeError, SQLSafetyError) as exc2:
+            return _escalate_soft(question, exc2)
 
-Question id: {question.id}
-Metric: {question.metric}
-Period: {question.period}
-{reviewer_context}
+    def _build_user_prompt(self, question: BusinessQuestion, reviewer_note: str | None) -> str:
+        schema_ctx = describe_schema_context(self.metadata)
+        reviewer_block = (
+            f"\nReviewer note for reinvestigation: {reviewer_note}" if reviewer_note else ""
+        )
+        template = _load_user_template()
+        # Strip the template header comment (everything before the first ---)
+        template_body = template.split("---\n", 1)[-1] if "---\n" in template else template
+        return template_body.replace("{schema_context}", schema_ctx).replace(
+            "{question_text}", question.text
+        ).replace("{question_id}", question.id).replace(
+            "{question_metric}", question.metric
+        ).replace("{question_period}", question.period).replace(
+            "{reviewer_note}", reviewer_block
+        )
 
-SQLite schema:
-{sqlite_context}
 
-dbt/source metadata:
-{compact_metadata_context(self.metadata)}
+def _adapt_payload(payload: dict) -> dict:
+    """Coerce common LLM-output drift into the contract.
 
-Metric hints:
-{metric_hints()}
+    Despite the system prompt specifying list[str] for filters and list[obj]
+    for interpretation_choices, models (especially less capable ones) will
+    return dicts or plain strings. We adapt here rather than failing so the
+    one-shot repair path is only needed for structural problems.
+    """
+    if "source" not in payload:
+        tables = payload.pop("source_tables", None)
+        if isinstance(tables, list) and tables:
+            payload["source"] = {
+                "primary_table": tables[0],
+                "why_chosen": "Selected by LLM (no rationale provided).",
+                "alternatives_available": tables[1:],
+            }
+    if "interpretation_choices" not in payload:
+        notes = payload.pop("ambiguity_notes", None)
+        if isinstance(notes, list) and notes:
+            payload["interpretation_choices"] = [
+                {"choice": note, "alternatives": [], "rationale": ""} for note in notes
+            ]
+        elif isinstance(notes, str) and notes.strip():
+            payload["interpretation_choices"] = [
+                {"choice": notes.strip(), "alternatives": [], "rationale": ""}
+            ]
+    for list_field in ("warnings", "dq_notes", "assumptions"):
+        if list_field in payload and not isinstance(payload[list_field], list):
+            raw = payload[list_field]
+            payload[list_field] = [str(raw)] if str(raw).strip() else []
+    if "filters" in payload and isinstance(payload["filters"], dict):
+        # Flatten dict filters to list of "key: value" strings
+        payload["filters"] = [f"{k}: {v}" for k, v in payload["filters"].items()]
+    return payload
 
-Return JSON with keys:
-question_id, question, metric_name, metric_value, period, source_tables, filters,
-assumptions, logic, sql, result_rows, ambiguity_notes, warnings.
-Set result_rows to [] because the application will execute the SQL.
-""".strip()
+
+def _escalate(question: BusinessQuestion, exc: LLMError) -> SQLAgentAnswer:
+    return SQLAgentAnswer(
+        question_id=question.id,
+        question=question.text,
+        metric_name=question.metric,
+        metric_value=None,
+        period=question.period,
+        source=None,
+        sql="",
+        filters=[],
+        assumptions=[],
+        logic="No answer produced — LLM call failed; pipeline escalated.",
+        result_rows=[],
+        interpretation_choices=[],
+        dq_notes=[],
+        warnings=[f"{type(exc).__name__}: {exc}"],
+        system_error=SystemError(
+            error_class=exc.error_class,  # type: ignore[arg-type]
+            message=str(exc),
+            suggested_action=exc.suggested_action,
+            raw=type(exc).__name__,
+        ),
+    )
+
+
+def _escalate_soft(question: BusinessQuestion, exc: Exception) -> SQLAgentAnswer:
+    return SQLAgentAnswer(
+        question_id=question.id,
+        question=question.text,
+        metric_name=question.metric,
+        metric_value=None,
+        period=question.period,
+        source=None,
+        sql="",
+        filters=[],
+        assumptions=[],
+        logic="No answer produced — LLM output failed validation after repair attempt.",
+        result_rows=[],
+        interpretation_choices=[],
+        dq_notes=[],
+        warnings=[f"{type(exc).__name__}: {str(exc)[:300]}"],
+        system_error=SystemError(
+            error_class="output",
+            message=str(exc)[:500],
+            suggested_action=(
+                "LLM returned content that did not validate after a one-shot repair. "
+                "Inspect the prompt in prompts/sql_agent_system.md and the raw response; "
+                "consider adding a stricter few-shot example or switching to a more capable model."
+            ),
+            raw=type(exc).__name__,
+        ),
+    )
 
 
 def _loads_json_object(text: str) -> dict:
+    text = text.strip()
+    # Strip markdown code fences if present
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text.strip())
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", text, flags=re.DOTALL)
         if not match:
-            raise
+            raise LLMOutputError(f"No JSON object found in model output: {text[:300]}") from None
         return json.loads(match.group(0))
-

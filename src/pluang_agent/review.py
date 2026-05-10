@@ -1,4 +1,12 @@
-"""Human review decision handling."""
+"""Human review (Decision 6).
+
+Reviewer audience is the data team (Decision 2). Output is technical: SQL,
+source rationale, layer-by-layer trust profile, interpretation choices.
+
+Demo modes are kept for sample-output generation; interactive mode runs at
+submission time. Per Decision 6, rejection requires a category + note; routing
+is determined by the category, never by parsing the note.
+"""
 
 from __future__ import annotations
 
@@ -73,12 +81,58 @@ def summarize_terminal_states(items: list[PipelineItem]) -> dict[str, int]:
 def _collect_interactive(items: list[PipelineItem]) -> list[ReviewDecision]:
     decisions: list[ReviewDecision] = []
     for item in items:
+        if item.answer.system_error is not None:
+            err = item.answer.system_error
+            console.print(
+                Panel.fit(
+                    f"[bold red]SYSTEM ERROR — pipeline escalated[/bold red]\n\n"
+                    f"Question: {item.question.text}\n"
+                    f"Error class: {err.error_class}\n"
+                    f"Message: {err.message}\n"
+                    f"Suggested action: {err.suggested_action}\n\n"
+                    f"This question has no answer to approve or reject. "
+                    f"It will be marked as audit_required (system_error).",
+                    title=item.question.id,
+                )
+            )
+            decisions.append(
+                ReviewDecision(
+                    question_id=item.question.id,
+                    decision="approve",
+                    terminal_state=TerminalState.AUDIT_REQUIRED,
+                    audit_reason="system_error",
+                )
+            )
+            continue
+
+        tp = item.quality_report.layer_c.trust_profile
+        layer_a = item.quality_report.layer_a
+        a_summary = ", ".join(
+            f"{c.name}={c.result}" for c in layer_a.checks
+        ) or "(no checks)"
+        ic_lines = "\n".join(
+            f"  • {ic.choice} (rationale: {ic.rationale})"
+            for ic in item.answer.interpretation_choices
+        ) or "  (none)"
+        source_block = (
+            f"Source: {item.answer.source.primary_table} — {item.answer.source.why_chosen}"
+            if item.answer.source
+            else "Source: (not populated)"
+        )
         console.print(
             Panel.fit(
                 f"[bold]{item.question.text}[/bold]\n\n"
                 f"Answer: {item.answer.metric_value}\n"
-                f"Sources: {', '.join(item.answer.source_tables)}\n"
-                f"QA: {item.quality_report.summary}",
+                f"{source_block}\n"
+                f"SQL: {item.answer.sql.splitlines()[0] if item.answer.sql else '(empty)'} ...\n"
+                f"\n[bold]Trust profile: {tp.overall}[/bold]\n"
+                f"  correctness={tp.dimensions.correctness} "
+                f"source={tp.dimensions.source_reliability} "
+                f"ambiguity={tp.dimensions.ambiguity}\n"
+                f"  {tp.reviewer_summary}\n"
+                f"\nLayer A: {a_summary}\n"
+                f"Layer B verdict: {item.quality_report.layer_b.verdict}\n"
+                f"Interpretation choices:\n{ic_lines}",
                 title=item.question.id,
             )
         )
@@ -108,4 +162,3 @@ def _collect_interactive(items: list[PipelineItem]) -> list[ReviewDecision]:
             )
         )
     return decisions
-

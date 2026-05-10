@@ -1,15 +1,27 @@
-"""Deterministic baseline answers for the five required questions."""
+"""Golden SQL answers for the 5 required questions.
+
+Hand-written deterministic SQL whose numerical output we know is correct.
+Lives in test fixtures only — used to validate that LLM-generated SQL produces
+the same numbers in R4 spot-checks. Not part of the product path.
+
+Relocated from src/pluang_agent/baseline.py at R1 per the locked decision.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from pluang_agent.models import BusinessQuestion, SQLAgentAnswer
+from pluang_agent.models import (
+    BusinessQuestion,
+    InterpretationChoice,
+    SourceProvenance,
+    SQLAgentAnswer,
+)
 from pluang_agent.sql_runner import execute_read_only
 
 
-def answer_with_baseline(db_path: Path, question: BusinessQuestion) -> SQLAgentAnswer:
+def golden_answer(db_path: Path, question: BusinessQuestion) -> SQLAgentAnswer:
     builders = {
         "q1_gtv_idr_by_asset_oct_2025": _gtv_idr_by_asset,
         "q2_gtv_usd_oct_2025": _gtv_usd_total,
@@ -20,7 +32,7 @@ def answer_with_baseline(db_path: Path, question: BusinessQuestion) -> SQLAgentA
     try:
         return builders[question.id](db_path, question)
     except KeyError as exc:
-        raise ValueError(f"No baseline query is defined for {question.id}") from exc
+        raise ValueError(f"No golden SQL is defined for {question.id}") from exc
 
 
 def _gtv_idr_by_asset(db_path: Path, question: BusinessQuestion) -> SQLAgentAnswer:
@@ -38,7 +50,9 @@ ORDER BY asset_class
     return _answer(
         question,
         metric_value={row["asset_class"]: row["gtv_idr"] for row in rows},
-        source_tables=["fct_trading_daily"],
+        primary_table="fct_trading_daily",
+        why_chosen="Canonical completed-transaction source per dbt metadata.",
+        alternatives_available=["agg_monthly_biz_summary", "mart_ops_dashboard"],
         filters=["transaction_date in October 2025", "completed transactions only"],
         assumptions=[
             "Use the dbt daily trading mart as the canonical completed-transaction source.",
@@ -61,7 +75,9 @@ WHERE transaction_date >= '2025-10-01'
     return _answer(
         question,
         metric_value=rows[0]["total_gtv_usd"],
-        source_tables=["fct_trading_daily"],
+        primary_table="fct_trading_daily",
+        why_chosen="Recorded USD on completed transactions, not an IDR conversion.",
+        alternatives_available=["agg_monthly_biz_summary", "mart_ops_dashboard"],
         filters=["transaction_date in October 2025", "completed transactions only"],
         assumptions=[
             "Use recorded USD transaction values, not a conversion from IDR.",
@@ -97,7 +113,9 @@ SELECT
             "raw_completed_unique_traders": row["raw_completed_unique_traders"],
             "mixpanel_mtu": row["mixpanel_mtu"],
         },
-        source_tables=["agg_monthly_biz_summary", "raw_transactions", "mart_ops_dashboard"],
+        primary_table="agg_monthly_biz_summary",
+        why_chosen="Business-summary MTU on Total row is the dashboard-ready definition.",
+        alternatives_available=["raw_transactions", "mart_ops_dashboard"],
         filters=["month = October 2025", "Total row for monthly marts"],
         assumptions=[
             "Primary MTU uses the business summary definition populated on the Total row.",
@@ -106,8 +124,16 @@ SELECT
         logic="Read business-summary MTU and compare it to raw completed traders and Ops/Mixpanel MTU.",
         sql=sql,
         result_rows=rows,
-        ambiguity_notes=[
-            "MTU is ambiguous in the provided data: AUM-derived MTU, raw completed traders, and Mixpanel MTU differ.",
+        interpretation_choices=[
+            InterpretationChoice(
+                choice="Primary = business-summary MTU (AUM-derived)",
+                alternatives=["raw distinct completed traders", "Mixpanel MTU (client-side)"],
+                rationale=(
+                    "All three are valid definitions. Business-summary MTU is the canonical "
+                    "monthly definition; raw traders count completed actors; Mixpanel measures "
+                    "client-side activity and is not delivery-guaranteed."
+                ),
+            )
         ],
     )
 
@@ -127,7 +153,9 @@ ORDER BY transaction_count DESC
     return _answer(
         question,
         metric_value={row["asset_class"]: row["transaction_count"] for row in rows},
-        source_tables=["fct_trading_daily"],
+        primary_table="fct_trading_daily",
+        why_chosen="Completed-transaction counts on the daily fact table.",
+        alternatives_available=["mart_ops_dashboard"],
         filters=["transaction_date in October 2025", "completed transactions only"],
         assumptions=["Use completed transaction counts from the dbt daily trading mart."],
         logic="Sum transaction_count across October 2025 by asset_class and rank descending.",
@@ -163,7 +191,12 @@ ORDER BY month
     return _answer(
         question,
         metric_value=rows,
-        source_tables=["fct_trading_daily"],
+        primary_table="fct_trading_daily",
+        why_chosen=(
+            "fct_trading_daily is the canonical completed-transaction source. The "
+            "agg_monthly_biz_summary Total row is known stale for December 2025."
+        ),
+        alternatives_available=["agg_monthly_biz_summary"],
         filters=[
             "transaction_date from 2025-10-01 through 2025-12-31",
             "completed transactions only",
@@ -178,13 +211,15 @@ ORDER BY month
 def _answer(
     question: BusinessQuestion,
     metric_value: Any,
-    source_tables: list[str],
+    primary_table: str,
+    why_chosen: str,
+    alternatives_available: list[str],
     filters: list[str],
     assumptions: list[str],
     logic: str,
     sql: str,
     result_rows: list[dict[str, Any]],
-    ambiguity_notes: list[str] | None = None,
+    interpretation_choices: list[InterpretationChoice] | None = None,
 ) -> SQLAgentAnswer:
     return SQLAgentAnswer(
         question_id=question.id,
@@ -192,11 +227,16 @@ def _answer(
         metric_name=question.metric,
         metric_value=metric_value,
         period=question.period,
-        source_tables=source_tables,
+        source=SourceProvenance(
+            primary_table=primary_table,
+            why_chosen=why_chosen,
+            alternatives_available=alternatives_available,
+        ),
+        sql=sql,
         filters=filters,
         assumptions=assumptions,
         logic=logic,
-        sql=sql,
         result_rows=result_rows,
-        ambiguity_notes=ambiguity_notes or [],
+        interpretation_choices=interpretation_choices or [],
+        dq_notes=[],
     )

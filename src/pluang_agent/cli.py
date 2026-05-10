@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import typer
@@ -20,12 +21,7 @@ console = Console()
 
 
 def _resolve_path_option(value: Path | None, fallback: Path) -> Path:
-    """Resolve CLI path options while tolerating empty shell-variable expansion.
-
-    Running `--data-dir "$PLUANG_DATA_DIR"` when the shell variable is unset passes
-    an empty string, which Typer normalizes to `Path(".")`. In that case, prefer
-    the value loaded from `.env`.
-    """
+    """Resolve CLI path options while tolerating empty shell-variable expansion."""
     if value is None:
         return fallback
     if value == Path("."):
@@ -86,16 +82,15 @@ def run(
         "--output-dir",
         help="Directory for JSON/log outputs.",
     ),
-    prefer_llm: bool = typer.Option(
-        False,
-        "--prefer-llm",
-        help="Use OpenRouter for SQL generation when OPENROUTER_API_KEY is set.",
-    ),
 ) -> None:
-    """Run the end-to-end agent pipeline."""
+    """Run the end-to-end agent pipeline.
+
+    LLM is required (no deterministic fallback). Set OPENROUTER_API_KEY for a
+    real run, or PLUANG_LLM_MOCK=1 to use the fixture-based mock client.
+    """
     from pluang_agent.agents.quality_agent import QualityAgent
     from pluang_agent.agents.sql_agent import SQLAgent
-    from pluang_agent.llm import OpenRouterClient
+    from pluang_agent.llm import make_client
     from pluang_agent.metadata import case_root_from_data_dir, load_dbt_metadata
     from pluang_agent.questions import REQUIRED_QUESTIONS
     from pluang_agent.workflow import run_pipeline, write_pipeline_outputs
@@ -108,13 +103,18 @@ def run(
             f"SQLite DB does not exist at {resolved_db_path}. Run `pluang-agent setup` first."
         )
 
+    if os.getenv("PLUANG_LLM_MOCK") != "1" and not settings.openrouter_api_key:
+        raise typer.BadParameter(
+            "OPENROUTER_API_KEY is not set. Either set the key in .env or run "
+            "with PLUANG_LLM_MOCK=1 to use the fixture-based mock client."
+        )
+
     metadata = load_dbt_metadata(case_root_from_data_dir(resolved_data_dir))
-    llm_client = OpenRouterClient(settings)
+    llm_client = make_client(settings)
     sql_agent = SQLAgent(
         db_path=resolved_db_path,
         metadata=metadata,
         llm_client=llm_client,
-        prefer_llm=prefer_llm,
     )
     quality_agent = QualityAgent(resolved_db_path)
     result = run_pipeline(REQUIRED_QUESTIONS, sql_agent, quality_agent, review_mode)
@@ -124,14 +124,14 @@ def run(
     table.add_column("Question")
     table.add_column("Review")
     table.add_column("Terminal")
-    table.add_column("QA Flags", justify="right")
+    table.add_column("Trust")
     for item in result.items:
         decision = item.review_decision
         table.add_row(
             item.question.id,
             decision.decision if decision else "missing",
             decision.terminal_state.value if decision and decision.terminal_state else "unknown",
-            str(len(item.quality_report.flags)),
+            item.quality_report.layer_c.trust_profile.overall,
         )
     console.print(table)
     console.print(f"[green]Outputs written to:[/green] {output_dir}")
@@ -149,7 +149,6 @@ def review_demo(
         data_dir=data_dir,
         review_mode=ReviewMode.DEMO_REJECT,
         output_dir=output_dir,
-        prefer_llm=False,
     )
 
 

@@ -4,24 +4,29 @@ Terminal summary: {'approved': 5}
 Question: q1_gtv_idr_by_asset_oct_2025
 Decision: approve
 Terminal state: approved
-QA summary: 1 quality flag(s) found. Hypotheses are included only where evidence exists.
+Trust profile: GREEN (correctness=GREEN source=GREEN ambiguity=GREEN)
+QA summary: Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
 
 Question: q2_gtv_usd_oct_2025
 Decision: approve
 Terminal state: approved
-QA summary: 1 quality flag(s) found. Hypotheses are included only where evidence exists.
+Trust profile: GREEN (correctness=GREEN source=GREEN ambiguity=GREEN)
+QA summary: Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
 
 Question: q3_mtu_oct_2025
 Decision: approve
 Terminal state: approved
-QA summary: 1 quality flag(s) found. Hypotheses are included only where evidence exists.
+Trust profile: YELLOW (correctness=GREEN source=GREEN ambiguity=YELLOW)
+QA summary: 1 interpretation choice(s) made; Layer A clean.
 
 Question: q4_transaction_count_by_asset_oct_2025
 Decision: approve
 Terminal state: approved
-QA summary: 1 quality flag(s) found. Hypotheses are included only where evidence exists.
+Trust profile: GREEN (correctness=GREEN source=GREEN ambiguity=GREEN)
+QA summary: Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
 
 Question: q5_gtv_mom_trend_oct_dec_2025
 Decision: approve
 Terminal state: approved
-QA summary: 1 quality flag(s) found. Hypotheses are included only where evidence exists.
+Trust profile: GREEN (correctness=GREEN source=GREEN ambiguity=GREEN)
+QA summary: Layer A clean. Layer B reconciliation not yet implemented (R1 stub).
