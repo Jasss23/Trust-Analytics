@@ -5,28 +5,28 @@ Question: q1_gtv_idr_by_asset_oct_2025
 Decision: approve
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher GTV reflects pending transactions being included via status != 'failed'.
+QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher GTV due to pending transactions included via status != 'failed', supported by a HIGH confidence hypothesis.
 
 Question: q2_gtv_usd_oct_2025
 Decision: approve
 Terminal state: approved
-Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher GTV reflects the inclusion of pending transactions and a fixed IDR/USD conversion rate.
+Trust profile: RED (correctness=GREEN source=RED ambiguity=YELLOW)
+QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the GTV figures from mart_ops_dashboard are higher due to pending transactions and a fixed conversion rate. There is 1 interpretation choice regarding the primary source for GTV.
 
 Question: q3_mtu_oct_2025
 Decision: approve
 Terminal state: approved
 Trust profile: YELLOW (correctness=GREEN source=YELLOW ambiguity=YELLOW)
-QA summary: Layer A clean. Layer B: MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). Differences are by design, not data quality. Surfaced in interpretation_choices instead. 1 interpretation choice(s) declared.
+QA summary: Layer A is clean with all checks passing. Layer B's verdict is NOT APPLICABLE due to definitional differences in MTU, and there is 1 interpretation choice regarding the AUM-derived Total row.
 
 Question: q4_transaction_count_by_asset_oct_2025
 Decision: approve
 Terminal state: approved
-Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher transaction counts reflect pending transactions being included via status != 'failed'.
+Trust profile: RED (correctness=GREEN source=RED ambiguity=YELLOW)
+QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher transaction counts due to including pending transactions, while fct_trading_daily reflects only completed transactions. The LLM hypothesis (HIGH confidence) explains this discrepancy.
 
 Question: q5_gtv_mom_trend_oct_dec_2025
 Decision: approve
 Terminal state: approved
-Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A clean. Layer B: 2 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): The discrepancy in December 2025 values for agg_monthly_biz_summary is due to the known stale data issue affecting that month's total.
+Trust profile: RED (correctness=GREEN source=RED ambiguity=YELLOW)
+QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 2 findings regarding December 2025 values; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting agg_monthly_biz_summary's total. There is 1 interpretation choice proposed.

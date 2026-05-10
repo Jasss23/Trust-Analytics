@@ -240,9 +240,30 @@ def _review_log(result: PipelineResult) -> str:
             f"ambiguity={tp.dimensions.ambiguity})"
         )
         lines.append(f"QA summary: {tp.reviewer_summary}")
-        if item.reinvestigated_quality_report:
+        if item.reinvestigated_quality_report and item.reinvestigated_answer:
             tp2 = item.reinvestigated_quality_report.layer_c.trust_profile
             lines.append(f"Reinvestigated trust profile: {tp2.overall} — {tp2.reviewer_summary}")
+            lines.append("Reinvestigation diff:")
+            orig_src = item.answer.source.primary_table if item.answer.source else "(none)"
+            new_src = (
+                item.reinvestigated_answer.source.primary_table
+                if item.reinvestigated_answer.source
+                else "(none)"
+            )
+            orig_overall = item.quality_report.layer_c.trust_profile.overall
+            new_overall = tp2.overall
+            change_marker = lambda a, b: " (changed)" if a != b else ""  # noqa: E731
+            lines.append(f"  source.primary_table: {orig_src} → {new_src}{change_marker(orig_src, new_src)}")
+            lines.append(f"  trust profile: {orig_overall} → {new_overall}{change_marker(orig_overall, new_overall)}")
+            orig_sql_first = item.answer.sql.splitlines()[0] if item.answer.sql else "(empty)"
+            new_sql_first = (
+                item.reinvestigated_answer.sql.splitlines()[0]
+                if item.reinvestigated_answer.sql
+                else "(empty)"
+            )
+            lines.append(
+                f"  sql (first line): {orig_sql_first[:100]}...{change_marker(orig_sql_first, new_sql_first)}"
+            )
         if item.audit_handoff:
             lines.append(f"Audit hand-off unresolved_questions: {item.audit_handoff.unresolved_questions}")
         lines.append("")

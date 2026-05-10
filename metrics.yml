@@ -52,6 +52,8 @@ metrics:
         aggregator: SUM
         notes: "Ops mart filters status != 'failed' (includes pending). Expected to be HIGHER than fct_trading_daily by ~10-15%."
     disagreement_threshold_pct: 1.0
+    expected_min: 100000000              # 100M IDR — even smallest asset class should clear this
+    expected_max: 1000000000000          # 1T IDR — even largest should be below this
 
   - id: q2_gtv_usd_oct_2025
     metric_name: total_gtv_usd
@@ -81,11 +83,16 @@ metrics:
         aggregator: SUM
         notes: "Uses fixed 15,000 IDR/USD conversion AND status != 'failed'. Expected to disagree by 15-25%."
     disagreement_threshold_pct: 1.0
+    expected_min: 100000                  # $100K USD/month is a very loose floor
+    expected_max: 100000000               # $100M USD/month ceiling
 
   - id: q3_mtu_oct_2025
     metric_name: monthly_transacting_users
-    # MTU has 3 valid definitions, all surfaced in SQLAgentAnswer.interpretation_choices.
-    # This is a DEFINITIONAL difference, not a data-quality disagreement, so Layer B is disabled.
+    # MTU has 3 valid definitions. The SQL Agent must surface all three in one
+    # query (see notes_for_layer_b). cross_source is `disabled` because the
+    # differences are definitional — Layer B should NOT flag DISAGREEMENT, but
+    # the SQL Agent still needs to see all three sources in its registry view
+    # so it produces the 3-column answer.
     cross_source: disabled
     period_start: '2025-10-01'
     period_end: '2025-11-01'
@@ -96,8 +103,24 @@ metrics:
       extra_filters: ["asset_class = 'Total'"]
       breakdown: null
       aggregator: RAW
-    alternatives: []
-    notes_for_layer_b: "MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). Differences are by design, not data quality. Surfaced in interpretation_choices instead."
+    alternatives:
+      - table: raw_transactions
+        column: user_id
+        period_column: transaction_date
+        extra_filters: ["status = 'completed'"]
+        breakdown: null
+        aggregator: COUNT_DISTINCT
+        notes: "Raw distinct completed traders. A different definition of MTU than the business summary."
+      - table: mart_ops_dashboard
+        column: mtu_mixpanel
+        period_column: month
+        extra_filters: ["asset_class = 'Total'"]
+        breakdown: null
+        aggregator: RAW
+        notes: "Mixpanel client-side MTU. Delivery not guaranteed; lower-bound estimate."
+    notes_for_layer_b: "MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). The SQL Agent MUST return all three in one query and populate interpretation_choices. Layer B treats differences as definitional, not data-quality."
+    expected_min: 1000                    # 1K MTU floor for a 10M-user platform
+    expected_max: 10000000                # 10M MTU ceiling
 
   - id: q4_transaction_count_by_asset_oct_2025
     metric_name: transaction_count_by_asset_class
@@ -127,6 +150,8 @@ metrics:
         aggregator: SUM
         notes: "Ops mart filters status != 'failed'. Expected to be HIGHER than fct_trading_daily by ~10-15%."
     disagreement_threshold_pct: 1.0
+    expected_min: 100                     # 100 tx/month for any asset class (very loose floor)
+    expected_max: 1000000                 # 1M tx/month ceiling per asset
 
   - id: q5_gtv_mom_trend_oct_dec_2025
     metric_name: gtv_idr_month_on_month_trend
@@ -150,3 +175,5 @@ metrics:
         notes: "Monthly Total row sourced from fct_trading_daily. Known issue: December 2025 Total row appears stale/incorrect — disagrees with fct by ~3.5%."
     disagreement_threshold_pct: 1.0
     notes_for_layer_b: "December 2025 Total row in agg_monthly_biz_summary is known stale per data team backlog."
+    expected_min: 1000000000              # 1B IDR per month floor
+    expected_max: 1000000000000           # 1T IDR per month ceiling

@@ -42,6 +42,11 @@ class MetricEntry:
     alternatives: tuple[SourceSpec, ...] = ()
     disagreement_threshold_pct: float = 1.0
     notes_for_layer_b: str = ""
+    # Plausibility bounds — Layer A flags FAIL when any breakdown value falls
+    # outside [expected_min, expected_max]. Both optional; skip the check when
+    # either is None. Hand-curated; widen generously to avoid false positives.
+    expected_min: float | None = None
+    expected_max: float | None = None
 
     @property
     def has_breakdown(self) -> bool:
@@ -85,7 +90,18 @@ def _build_entry(raw: dict) -> MetricEntry:
         alternatives=tuple(_build_source(alt) for alt in raw.get("alternatives") or []),
         disagreement_threshold_pct=float(raw.get("disagreement_threshold_pct", 1.0)),
         notes_for_layer_b=raw.get("notes_for_layer_b", ""),
+        expected_min=_optional_float(raw.get("expected_min")),
+        expected_max=_optional_float(raw.get("expected_max")),
     )
+
+
+def _optional_float(v: object) -> float | None:
+    if v is None:
+        return None
+    try:
+        return float(v)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
 
 
 def _build_source(raw: dict) -> SourceSpec:

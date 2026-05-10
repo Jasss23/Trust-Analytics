@@ -26,6 +26,7 @@ from pluang_agent.llm import (
     OpenRouterClient,
 )
 from pluang_agent.metadata import DbtMetadata, describe_schema_context
+from pluang_agent.metrics import MetricEntry, MetricsRegistry, SourceSpec
 from pluang_agent.models import (
     BusinessQuestion,
     SQLAgentAnswer,
@@ -50,10 +51,12 @@ class SQLAgent:
         db_path: Path,
         metadata: DbtMetadata,
         llm_client: OpenRouterClient,
+        metrics_registry: MetricsRegistry | None = None,
     ):
         self.db_path = db_path
         self.metadata = metadata
         self.llm_client = llm_client
+        self.metrics_registry = metrics_registry or MetricsRegistry(entries={})
 
     def answer(
         self,
@@ -132,19 +135,60 @@ class SQLAgent:
 
     def _build_user_prompt(self, question: BusinessQuestion, reviewer_note: str | None) -> str:
         schema_ctx = describe_schema_context(self.metadata)
+        registry_entry = _render_registry_entry(
+            self.metrics_registry.get(question.id)
+        )
         reviewer_block = (
             f"\nReviewer note for reinvestigation: {reviewer_note}" if reviewer_note else ""
         )
         template = _load_user_template()
-        # Strip the template header comment (everything before the first ---)
         template_body = template.split("---\n", 1)[-1] if "---\n" in template else template
         return template_body.replace("{schema_context}", schema_ctx).replace(
-            "{question_text}", question.text
-        ).replace("{question_id}", question.id).replace(
-            "{question_metric}", question.metric
-        ).replace("{question_period}", question.period).replace(
-            "{reviewer_note}", reviewer_block
-        )
+            "{registry_entry}", registry_entry
+        ).replace("{question_text}", question.text).replace(
+            "{question_id}", question.id
+        ).replace("{question_metric}", question.metric).replace(
+            "{question_period}", question.period
+        ).replace("{reviewer_note}", reviewer_block)
+
+
+def _render_registry_entry(entry: MetricEntry | None) -> str:
+    """Render a MetricEntry as a YAML-style block for the user prompt.
+
+    Returns a no-entry note when the question is not registered (so the LLM
+    can still fall back to schema-only reasoning).
+    """
+    if entry is None:
+        return "(no metric registry entry — fall back to schema context only)"
+
+    def fmt_source(label: str, src: SourceSpec) -> list[str]:
+        return [
+            f"  {label}:",
+            f"    table: {src.table}",
+            f"    column: {src.column}",
+            f"    period_column: {src.period_column}",
+            f"    extra_filters: {list(src.extra_filters)}",
+            f"    breakdown: {src.breakdown}",
+            f"    aggregator: {src.aggregator}",
+            *([f"    notes: {src.notes}"] if src.notes else []),
+        ]
+
+    lines: list[str] = [
+        f"id: {entry.id}",
+        f"metric_name: {entry.metric_name}",
+        f"cross_source: {entry.cross_source}",
+        f"period_start: {entry.period_start}",
+        f"period_end: {entry.period_end}",
+        "primary:",
+    ]
+    lines.extend(fmt_source("(primary)", entry.primary)[1:])
+    if entry.alternatives:
+        lines.append("alternatives:")
+        for i, alt in enumerate(entry.alternatives):
+            lines.extend(fmt_source(f"alt_{i}", alt))
+    if entry.notes_for_layer_b:
+        lines.append(f"notes_for_layer_b: {entry.notes_for_layer_b}")
+    return "\n".join(lines)
 
 
 def _adapt_payload(payload: dict) -> dict:

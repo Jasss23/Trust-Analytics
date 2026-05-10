@@ -1,0 +1,43 @@
+# Per-table warnings injected into the SQL Agent's schema context.
+#
+# This file is hand-curated by the data team. Each warning describes a quirk
+# the SQL Agent must be aware of when querying that table — e.g. column-format
+# gotchas, hidden filter semantics, known stale data. Warnings are surfaced
+# as ⚠️ blocks in describe_schema_context() output.
+#
+# In production this would be merged with dbt YAML descriptions (or replaced
+# by dbt Semantic Layer / WrenAI MDL `_instructions`). Here it's a simple
+# YAML so onboarding a new dataset means: drop in dbt YAMLs + metrics.yml
+# + instructions.yml, no Python changes.
+#
+# Schema:
+#   tables:
+#     <table_name>:
+#       warnings:
+#         - "<short, imperative warning text>"
+#         - ...
+
+tables:
+
+  fct_trading_daily:
+    warnings:
+      - "Canonical completed-transaction source. status=completed is already applied; do NOT add a status filter."
+      - "Pre-aggregated daily mart: each row is one day's totals. Use SUM(transaction_count) and SUM(gtv_idr) to roll up across days, NEVER COUNT(transaction_count)."
+
+  agg_monthly_biz_summary:
+    warnings:
+      - "month column stores YYYY-MM-01 (first day of the month). Use month >= 'YYYY-MM-01' AND month < 'YYYY-MM+1-01'. Never compare month = 'YYYY-MM' (returns zero rows)."
+      - "Total row: when a row has asset_class = 'Total' it already aggregates all asset classes for the month. When grouping by asset_class, add WHERE asset_class != 'Total'. When asking for the overall total only, use WHERE asset_class = 'Total'."
+      - "mtu is populated ONLY on the Total row — NULL for individual asset_class rows."
+      - "December 2025 Total row is known stale per the data team backlog; for December trends prefer fct_trading_daily."
+
+  mart_ops_dashboard:
+    warnings:
+      - "Managed by the Ops team — NOT a dbt model."
+      - "Includes status != 'failed' (so completed + pending). Produces HIGHER GTV and transaction counts than fct_trading_daily."
+      - "gtv_usd_reported uses a fixed 15,000 IDR/USD exchange rate. Do NOT use it for USD GTV — use fct_trading_daily.gtv_usd, which captures the recorded USD value at transaction time."
+      - "month column stores YYYY-MM-01 like agg_monthly_biz_summary. Use month >= 'YYYY-MM-01' AND month < 'YYYY-MM+1-01'."
+
+  stg_mixpanel_events:
+    warnings:
+      - "Client-side events captured via Firebase SDK. Delivery is NOT guaranteed; this table should not be the sole source of truth for transaction volumes or user counts."

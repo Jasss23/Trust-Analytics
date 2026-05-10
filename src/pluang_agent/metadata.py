@@ -12,6 +12,7 @@ Retrieval is deferred to a future scaling step (see README Scaling section).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -45,48 +46,48 @@ def _read_yaml(path: Path) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# WrenAI-style schema context (primary context builder — R2+)
+# WrenAI-style schema context (primary context builder)
 # ---------------------------------------------------------------------------
 
-# Per-table/model warning annotations that the dbt YAML cannot express.
-# These map directly to the disambiguation rules in prompts/sql_agent_system.md.
-_TABLE_WARNINGS: dict[str, list[str]] = {
-    "agg_monthly_biz_summary": [
-        "month column stores YYYY-MM-01 (first day of month). "
-        "Always use: month >= 'YYYY-MM-01' AND month < 'YYYY-MM+1-01'. Never 'YYYY-MM'.",
-        "Contains a Total row (asset_class = 'Total') that aggregates all asset classes. "
-        "When grouping by asset_class, add WHERE asset_class != 'Total'.",
-        "mtu is populated ONLY on the Total row. NULL for individual asset_class rows.",
-    ],
-    "mart_ops_dashboard": [
-        "Managed by the Ops team — NOT a dbt model.",
-        "Includes status != 'failed' (completed + pending). "
-        "Produces HIGHER GTV and transaction counts than fct_trading_daily.",
-        "gtv_usd_reported uses a fixed 15,000 IDR/USD exchange rate. "
-        "Do NOT use for USD GTV — use fct_trading_daily.gtv_usd instead.",
-        "month column stores YYYY-MM-01. "
-        "Always use: month >= 'YYYY-MM-01' AND month < 'YYYY-MM+1-01'.",
-    ],
-    "stg_mixpanel_events": [
-        "Client-side events — delivery is NOT guaranteed. "
-        "Do not use as sole source of truth for transaction volumes or user counts.",
-    ],
-    "fct_trading_daily": [
-        "Canonical source for completed-transaction GTV and counts. "
-        "status = completed is already applied — do NOT add a status filter.",
-    ],
-}
+_DEFAULT_INSTRUCTIONS_PATH = Path(__file__).parents[2] / "instructions.yml"
 
 
-def describe_schema_context(metadata: DbtMetadata) -> str:
+def load_instructions(path: Path | None = None) -> dict[str, list[str]]:
+    """Load per-table warning blocks from instructions.yml.
+
+    Returns dict[table_name, list[warning_str]]. Empty dict if file missing.
+    Path defaults to project_root/instructions.yml; override via
+    PLUANG_INSTRUCTIONS_PATH env var or explicit argument.
+    """
+    if path is None:
+        env_path = os.getenv("PLUANG_INSTRUCTIONS_PATH")
+        path = Path(env_path) if env_path else _DEFAULT_INSTRUCTIONS_PATH
+    if not path.is_file():
+        return {}
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    out: dict[str, list[str]] = {}
+    for table_name, table_block in (raw.get("tables") or {}).items():
+        warnings = table_block.get("warnings") or []
+        if isinstance(warnings, list):
+            out[table_name] = [str(w) for w in warnings]
+    return out
+
+
+def describe_schema_context(
+    metadata: DbtMetadata,
+    instructions: dict[str, list[str]] | None = None,
+) -> str:
     """Return a WrenAI-style full-text schema description for the LLM prompt.
 
     Format is modelled on WrenAI's describe_schema() from schema_indexer.py:
     each source table and mart model is rendered as a `### Model:` block with
-    description, grain, warnings, and full column descriptions inlined.
+    description, grain, warnings (from instructions.yml), and full column
+    descriptions inlined.
 
-    All 7 tables are always included — no retrieval, no truncation.
+    All tables are always included — no retrieval, no truncation.
     """
+    if instructions is None:
+        instructions = load_instructions()
     lines: list[str] = []
 
     # Raw source tables from _sources.yml
@@ -97,27 +98,30 @@ def describe_schema_context(metadata: DbtMetadata) -> str:
         lines.append("")
 
         for table in source_group.get("tables", []):
-            _render_table(table, lines)
+            _render_table(table, lines, instructions)
 
     # Mart / reporting models from _models.yml
     if metadata.models:
         lines.append("### dbt mart models (built from source tables above)")
         lines.append("")
         for model in metadata.models.get("models", []):
-            _render_model(model, lines)
+            _render_model(model, lines, instructions)
 
     return "\n".join(lines)
 
 
-def _render_table(table: dict[str, Any], lines: list[str]) -> None:
+def _render_table(
+    table: dict[str, Any],
+    lines: list[str],
+    instructions: dict[str, list[str]],
+) -> None:
     name = table.get("name", "?")
     desc = _clean(table.get("description", ""))
     lines.append(f"#### Table: {name}")
     if desc:
         lines.append(f"  {desc}")
 
-    warnings = _TABLE_WARNINGS.get(name, [])
-    for w in warnings:
+    for w in instructions.get(name, []):
         lines.append(f"  ⚠️  {w}")
 
     cols = table.get("columns", [])
@@ -128,7 +132,11 @@ def _render_table(table: dict[str, Any], lines: list[str]) -> None:
     lines.append("")
 
 
-def _render_model(model: dict[str, Any], lines: list[str]) -> None:
+def _render_model(
+    model: dict[str, Any],
+    lines: list[str],
+    instructions: dict[str, list[str]],
+) -> None:
     name = model.get("name", "?")
     desc = _clean(model.get("description", ""))
     meta = model.get("meta", {})
@@ -138,7 +146,6 @@ def _render_model(model: dict[str, Any], lines: list[str]) -> None:
 
     header = f"#### Model: {name}"
     if desc:
-        # Take first sentence of description for the header line
         first_sentence = desc.split(".")[0].strip()
         header += f" — {first_sentence}"
     lines.append(header)
@@ -147,13 +154,10 @@ def _render_model(model: dict[str, Any], lines: list[str]) -> None:
         lines.append(f"  Owner: {owner}  Managed by: {managed_by}")
     if source_tables:
         lines.append(f"  Source tables: {', '.join(source_tables)}")
-
-    # Full description on its own line if it differs from the header fragment
     if desc:
         lines.append(f"  Description: {desc}")
 
-    warnings = _TABLE_WARNINGS.get(name, [])
-    for w in warnings:
+    for w in instructions.get(name, []):
         lines.append(f"  ⚠️  {w}")
 
     cols = model.get("columns", [])

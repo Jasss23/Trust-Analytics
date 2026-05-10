@@ -2,6 +2,7 @@
 
 Variables (replaced in Python before sending):
 - {schema_context}     — WrenAI-style full schema description from describe_schema_context()
+- {registry_entry}     — Metric registry entry (yaml-style block) for this question
 - {question_text}      — Plain-English business question
 - {question_id}        — Stable question identifier (e.g. q1_gtv_idr_by_asset_oct_2025)
 - {question_metric}    — Concise metric name
@@ -10,9 +11,15 @@ Variables (replaced in Python before sending):
 
 ---
 
-## Available schema and business context
+## Schema context (tables, columns, descriptions, ⚠️ warnings)
 
 {schema_context}
+
+---
+
+## Metric registry entry
+
+{registry_entry}
 
 ---
 
@@ -27,4 +34,4 @@ Period: {question_period}
 
 ## Instructions
 
-Using the schema context above and the source selection / date filter rules from the system prompt, write the SQL and return the JSON answer now. Return ONLY the JSON object — no explanation before or after.
+Follow the process from the system prompt: identify the registry entry above, use its primary source by default, apply its extra_filters, comply with the ⚠️ warnings on your chosen table, and surface ambiguity via interpretation_choices when applicable. Return ONLY the JSON object — no explanation before or after.

@@ -25,6 +25,12 @@
           "evidence": [],
           "name": "no_zero_for_must_be_positive",
           "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "plausible_range",
+          "result": "PASS"
         }
       ]
     },
@@ -88,9 +94,11 @@
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher GTV reflects pending transactions being included via status != 'failed'."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher GTV due to pending transactions included via status != 'failed'. The LLM hypothesis has HIGH confidence and is supported by operational notes."
       },
-      "unresolved_questions": []
+      "unresolved_questions": [
+        "Determine which source is authoritative regarding the treatment of pending transactions in GTV calculations."
+      ]
     },
     "question_id": "q1_gtv_idr_by_asset_oct_2025"
   },
@@ -119,6 +127,12 @@
           "detail": null,
           "evidence": [],
           "name": "no_zero_for_must_be_positive",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "plausible_range",
           "result": "PASS"
         }
       ]
@@ -159,14 +173,16 @@
     "layer_c": {
       "trust_profile": {
         "dimensions": {
-          "ambiguity": "GREEN",
+          "ambiguity": "YELLOW",
           "correctness": "GREEN",
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher GTV reflects the inclusion of pending transactions and a fixed IDR/USD conversion rate."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher GTV due to pending transactions and a fixed conversion rate. There is 1 interpretation choice regarding the primary source for GTV."
       },
-      "unresolved_questions": []
+      "unresolved_questions": [
+        "Which source should be considered authoritative for the GTV figure: fct_trading_daily or mart_ops_dashboard?"
+      ]
     },
     "question_id": "q2_gtv_usd_oct_2025"
   },
@@ -196,13 +212,19 @@
           "evidence": [],
           "name": "no_zero_for_must_be_positive",
           "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "plausible_range",
+          "result": "PASS"
         }
       ]
     },
     "layer_b": {
       "cross_source_findings": [],
       "hypothesis": null,
-      "hypothesis_absence_note": "MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). Differences are by design, not data quality. Surfaced in interpretation_choices instead.",
+      "hypothesis_absence_note": "MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). The SQL Agent MUST return all three in one query and populate interpretation_choices. Layer B treats differences as definitional, not data-quality.",
       "verdict": "NOT_APPLICABLE"
     },
     "layer_c": {
@@ -213,7 +235,7 @@
           "source_reliability": "YELLOW"
         },
         "overall": "YELLOW",
-        "reviewer_summary": "Layer A clean. Layer B: MTU has three definitions (AUM-derived, raw-completed-traders, Mixpanel). Differences are by design, not data quality. Surfaced in interpretation_choices instead. 1 interpretation choice(s) declared."
+        "reviewer_summary": "Layer A is clean. Layer B verdict is NOT APPLICABLE due to definitional differences in MTU, with no hypothesis present. There is 1 interpretation choice regarding the AUM-derived Total row."
       },
       "unresolved_questions": []
     },
@@ -244,6 +266,12 @@
           "detail": null,
           "evidence": [],
           "name": "no_zero_for_must_be_positive",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "plausible_range",
           "result": "PASS"
         }
       ]
@@ -290,9 +318,9 @@
       "hypothesis": {
         "confidence": "HIGH",
         "evidence": [
-          "Ops note: 'filters status != failed'. Expected to be HIGHER by ~10-15%.",
-          "Observed ops delta = +12.7555%, within the expected 10-15% range.",
-          "agg_monthly_biz_summary matches fct exactly (delta 0%), confirming fct is the canonical completed-transaction source."
+          "Ops note: 'filters status != failed'. Expected to be HIGHER by ~10-15%'",
+          "Observed ops delta = +12.7555%, within the expected 10-15% range",
+          "agg_monthly_biz_summary matches fct exactly (delta 0%), confirming fct is the canonical completed-transaction source"
         ],
         "proposal": "mart_ops_dashboard's higher transaction counts reflect pending transactions being included via status != 'failed'.",
         "what_this_does_not_explain": "None \u2014 the per-source notes fully explain the observed pattern."
@@ -303,14 +331,16 @@
     "layer_c": {
       "trust_profile": {
         "dimensions": {
-          "ambiguity": "GREEN",
+          "ambiguity": "YELLOW",
           "correctness": "GREEN",
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A clean. Layer B: 3 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): mart_ops_dashboard's higher transaction counts reflect pending transactions being included via status != 'failed'."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher transaction counts due to pending transactions included via status != 'failed'. The LLM hypothesis has HIGH confidence and is supported by evidence, but there is 1 interpretation choice present."
       },
-      "unresolved_questions": []
+      "unresolved_questions": [
+        "Which source should be considered authoritative for the transaction counts: fct_trading_daily or mart_ops_dashboard?"
+      ]
     },
     "question_id": "q4_transaction_count_by_asset_oct_2025"
   },
@@ -339,6 +369,12 @@
           "detail": null,
           "evidence": [],
           "name": "no_zero_for_must_be_positive",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "plausible_range",
           "result": "PASS"
         }
       ]
@@ -370,7 +406,7 @@
         "confidence": "HIGH",
         "evidence": [
           "agg_monthly_biz_summary's December value is 37268719996.0, which is 3.4607% lower than fct_trading_daily's 38604717992.0.",
-          "Metric-level note states that the December 2025 Total row in agg_monthly_biz_summary is known stale."
+          "Metric-level note states: 'December 2025 Total row in agg_monthly_biz_summary is known stale.'"
         ],
         "proposal": "The discrepancy in December 2025 values for agg_monthly_biz_summary is due to the known stale data issue affecting that month's total.",
         "what_this_does_not_explain": "None \u2014 the known stale data issue fully explains the observed pattern."
@@ -381,14 +417,16 @@
     "layer_c": {
       "trust_profile": {
         "dimensions": {
-          "ambiguity": "GREEN",
+          "ambiguity": "YELLOW",
           "correctness": "GREEN",
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A clean. Layer B: 2 cross-source findings show DISAGREEMENT. Hypothesis (HIGH): The discrepancy in December 2025 values for agg_monthly_biz_summary is due to the known stale data issue affecting that month's total."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 2 findings regarding December 2025 values; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting agg_monthly_biz_summary's total. There is 1 interpretation choice proposed."
       },
-      "unresolved_questions": []
+      "unresolved_questions": [
+        "Confirm whether fct_trading_daily is the authoritative source for the December figure, given the stale data issue noted."
+      ]
     },
     "question_id": "q5_gtv_mom_trend_oct_dec_2025"
   }

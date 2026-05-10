@@ -117,6 +117,7 @@ def run(
         db_path=resolved_db_path,
         metadata=metadata,
         llm_client=llm_client,
+        metrics_registry=metrics_registry,
     )
     quality_agent = QualityAgent(
         db_path=resolved_db_path,
@@ -125,6 +126,11 @@ def run(
     )
     result = run_pipeline(REQUIRED_QUESTIONS, sql_agent, quality_agent, review_mode)
     write_pipeline_outputs(result, output_dir)
+
+    # Post-pipeline reinvestigation diff — render before the summary table so
+    # the reviewer sees what actually changed when an item was reinvestigated.
+    from pluang_agent.review import render_reinvestigation_diffs
+    render_reinvestigation_diffs(result.items)
 
     table = Table(title="Pipeline Result")
     table.add_column("Question")
