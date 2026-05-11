@@ -1,14 +1,20 @@
-"""SQL Agent — LLM-driven, prompts loaded from files (V6 compliance).
+"""SQL Agent — one LLM call per invocation (R5).
 
-Prompt engineering inspired by WrenAI's describe_schema() pattern:
-full column descriptions (not just names) are injected as context so the
-LLM can reason about source selection and date filters from business meaning,
-not column name inference.
+R5 changes vs the R3.5 shape:
+- Single attempt: the agent no longer runs an internal repair loop. Retry
+  policy lives in the state machine (workflow / sql_attempt.run_one_attempt).
+- SQL execution moves out: this module produces a SQL string and never
+  touches the database. Execution + pre-flight are run by sql_attempt.
+- `correction_context` parameter: when the workflow retries an attempt, it
+  passes a CorrectionContext built from the previous failure (exec error
+  with schema hint, pre-flight failure, or human reject). The agent renders
+  a `## Correction` block into the user prompt; the model is expected to
+  produce a *different* SQL that addresses the specific failure.
 
-Error handling:
-- Hard errors (auth/quota/transient): escalate immediately via SystemError.
-- Soft errors (bad output/schema/SQL): one-shot repair attempt, then escalate.
-  No silent fallback to deterministic oracle — V5.
+Prompt engineering principle: domain knowledge lives in YAML (metrics.yml +
+instructions.yml). The system prompt carries process rules only, plus an
+empty JSON output skeleton — no Pluang-specific tables or rules baked into
+the prompt.
 """
 
 from __future__ import annotations
@@ -29,10 +35,11 @@ from pluang_agent.metadata import DbtMetadata, describe_schema_context
 from pluang_agent.metrics import MetricEntry, MetricsRegistry, SourceSpec
 from pluang_agent.models import (
     BusinessQuestion,
+    CorrectionContext,
     SQLAgentAnswer,
     SystemError,
 )
-from pluang_agent.sql_runner import SQLSafetyError, execute_read_only
+from pluang_agent.sql_runner import SQLSafetyError
 
 _PROMPTS_DIR = Path(__file__).parents[3] / "prompts"
 
@@ -62,78 +69,57 @@ class SQLAgent:
         self,
         question: BusinessQuestion,
         reviewer_note: str | None = None,
+        correction_context: CorrectionContext | None = None,
     ) -> SQLAgentAnswer:
-        try:
-            return self._answer_with_llm(question, reviewer_note)
-        except HARD_ERROR_TYPES as exc:
-            return _escalate(question, exc)
-        except LLMError as exc:
-            return _escalate(question, exc)
+        """One LLM call → parsed SQLAgentAnswer. Does NOT execute SQL.
 
-    def _answer_with_llm(
+        On hard LLM error (auth/quota/transient): returns SQLAgentAnswer with
+        system_error set to that class. On soft error (parse/validation/SQL
+        safety on the SQL string): returns SQLAgentAnswer with system_error
+        class='output'. The workflow inspects `error_class` to decide retry
+        vs. immediate escalation.
+        """
+        try:
+            return self._attempt_once(question, reviewer_note, correction_context)
+        except HARD_ERROR_TYPES as exc:
+            return _escalate_hard(question, exc)
+        except (LLMOutputError, ValidationError, json.JSONDecodeError, SQLSafetyError) as exc:
+            return _make_soft_failure_answer(question, exc)
+        except LLMError as exc:
+            return _escalate_hard(question, exc)
+
+    def _attempt_once(
         self,
         question: BusinessQuestion,
         reviewer_note: str | None,
+        correction_context: CorrectionContext | None,
     ) -> SQLAgentAnswer:
         system = _load_system_prompt()
-        user = self._build_user_prompt(question, reviewer_note)
+        user = self._build_user_prompt(question, reviewer_note, correction_context)
+        stage = (
+            f"sql_agent:{question.id}"
+            if correction_context is None
+            else f"sql_agent_retry:{question.id}"
+        )
+        response = self.llm_client.chat_json(system, user, stage_tag=stage)
+        payload = _loads_json_object(response.content)
+        payload = _adapt_payload(payload)
+        answer = SQLAgentAnswer.model_validate(payload)
+        answer.usage = response.usage
+        # Validate the SQL string is well-formed read-only SQL before handing
+        # it off; this catches SAFETY issues early (the exec path will catch
+        # runtime issues like missing columns).
+        from pluang_agent.sql_runner import validate_read_only_sql
 
-        # First attempt
-        try:
-            response = self.llm_client.chat_json(system, user, stage_tag=f"sql_agent:{question.id}")
-            payload = _loads_json_object(response.content)
-            payload = _adapt_payload(payload)
-            answer = SQLAgentAnswer.model_validate(payload)
-            answer.usage = response.usage
-        except (LLMOutputError, ValidationError, json.JSONDecodeError, SQLSafetyError) as exc:
-            # One-shot repair: feed the error + bad output back
-            answer = self._repair_attempt(question, reviewer_note, exc, system, user)
-            if answer.system_error is not None:
-                return answer  # repair also failed — escalate
-
-        # Execute the SQL
-        try:
-            rows = execute_read_only(self.db_path, answer.sql)
-        except SQLSafetyError as exc:
-            return _escalate_soft(question, exc)
-        answer.result_rows = rows
-        if answer.metric_value is None:
-            answer.metric_value = rows
+        validate_read_only_sql(answer.sql)
         return answer
 
-    def _repair_attempt(
+    def _build_user_prompt(
         self,
         question: BusinessQuestion,
         reviewer_note: str | None,
-        original_exc: Exception,
-        system: str,
-        original_user: str,
-    ) -> SQLAgentAnswer:
-        """One-shot repair: append the error to the user prompt and retry once."""
-        error_summary = f"{type(original_exc).__name__}: {str(original_exc)[:400]}"
-        repair_user = (
-            original_user
-            + f"\n\n---\nPrevious attempt failed validation. Error: {error_summary}\n"
-            "Fix the JSON structure and return a valid response. "
-            "Ensure filters is a list of strings, interpretation_choices is a list of objects, "
-            "and warnings/dq_notes are lists.\n---"
-        )
-        try:
-            response = self.llm_client.chat_json(
-                system, repair_user, stage_tag=f"sql_agent_repair:{question.id}"
-            )
-            payload = _loads_json_object(response.content)
-            payload = _adapt_payload(payload)
-            answer = SQLAgentAnswer.model_validate(payload)
-            answer.usage = response.usage
-            answer.warnings.append(
-                f"First attempt failed ({type(original_exc).__name__}); repaired on second attempt."
-            )
-            return answer
-        except (LLMOutputError, ValidationError, json.JSONDecodeError, SQLSafetyError) as exc2:
-            return _escalate_soft(question, exc2)
-
-    def _build_user_prompt(self, question: BusinessQuestion, reviewer_note: str | None) -> str:
+        correction_context: CorrectionContext | None,
+    ) -> str:
         schema_ctx = describe_schema_context(self.metadata)
         registry_entry = _render_registry_entry(
             self.metrics_registry.get(question.id)
@@ -141,15 +127,58 @@ class SQLAgent:
         reviewer_block = (
             f"\nReviewer note for reinvestigation: {reviewer_note}" if reviewer_note else ""
         )
+        correction_block = _render_correction_block(correction_context)
         template = _load_user_template()
         template_body = template.split("---\n", 1)[-1] if "---\n" in template else template
-        return template_body.replace("{schema_context}", schema_ctx).replace(
-            "{registry_entry}", registry_entry
-        ).replace("{question_text}", question.text).replace(
-            "{question_id}", question.id
-        ).replace("{question_metric}", question.metric).replace(
-            "{question_period}", question.period
-        ).replace("{reviewer_note}", reviewer_block)
+        return (
+            template_body
+            .replace("{schema_context}", schema_ctx)
+            .replace("{registry_entry}", registry_entry)
+            .replace("{question_text}", question.text)
+            .replace("{question_id}", question.id)
+            .replace("{question_metric}", question.metric)
+            .replace("{question_period}", question.period)
+            .replace("{reviewer_note}", reviewer_block)
+            .replace("{correction_block}", correction_block)
+        )
+
+
+def _render_correction_block(correction: CorrectionContext | None) -> str:
+    """Render the optional ## Correction block for a retry attempt.
+
+    Empty string when no correction context — the prompt template still
+    works on the first attempt with `{correction_block}` substituting to ''.
+    """
+    if correction is None:
+        return ""
+    lines = [
+        "",
+        "## Correction",
+        "Your previous attempt failed. Do NOT repeat the previous SQL — address the specific failure below.",
+        "",
+        f"Failure kind: {correction.failure_kind}",
+        f"Failure detail: {correction.failure_detail}",
+        "",
+        "Previous SQL:",
+        "```sql",
+        correction.prev_sql or "(empty)",
+        "```",
+    ]
+    if correction.schema_hint:
+        lines.extend([
+            "",
+            "Live column info for the tables your previous SQL referenced "
+            "(authoritative — use these names exactly):",
+            "```",
+            correction.schema_hint,
+            "```",
+        ])
+    if correction.reviewer_note:
+        lines.extend([
+            "",
+            f"Reviewer note: {correction.reviewer_note}",
+        ])
+    return "\n".join(lines)
 
 
 def _render_registry_entry(entry: MetricEntry | None) -> str:
@@ -195,9 +224,9 @@ def _adapt_payload(payload: dict) -> dict:
     """Coerce common LLM-output drift into the contract.
 
     Despite the system prompt specifying list[str] for filters and list[obj]
-    for interpretation_choices, models (especially less capable ones) will
-    return dicts or plain strings. We adapt here rather than failing so the
-    one-shot repair path is only needed for structural problems.
+    for interpretation_choices, models will return dicts or plain strings.
+    Adapt here rather than failing so the retry loop is only needed for
+    structural problems (and not field-shape micro-violations).
     """
     if "source" not in payload:
         tables = payload.pop("source_tables", None)
@@ -227,7 +256,7 @@ def _adapt_payload(payload: dict) -> dict:
     return payload
 
 
-def _escalate(question: BusinessQuestion, exc: LLMError) -> SQLAgentAnswer:
+def _escalate_hard(question: BusinessQuestion, exc: LLMError) -> SQLAgentAnswer:
     return SQLAgentAnswer(
         question_id=question.id,
         question=question.text,
@@ -252,7 +281,16 @@ def _escalate(question: BusinessQuestion, exc: LLMError) -> SQLAgentAnswer:
     )
 
 
-def _escalate_soft(question: BusinessQuestion, exc: Exception) -> SQLAgentAnswer:
+def _make_soft_failure_answer(
+    question: BusinessQuestion, exc: Exception
+) -> SQLAgentAnswer:
+    """Soft failure (parse / schema validation / SQL safety).
+
+    Unlike hard errors, soft failures are retry-eligible at the state-machine
+    level. The agent surfaces the failure on the answer (class='output') so
+    the workflow can decide whether to retry with a correction context or
+    give up. No internal repair — that lives in the state machine now.
+    """
     return SQLAgentAnswer(
         question_id=question.id,
         question=question.text,
@@ -263,7 +301,7 @@ def _escalate_soft(question: BusinessQuestion, exc: Exception) -> SQLAgentAnswer
         sql="",
         filters=[],
         assumptions=[],
-        logic="No answer produced — LLM output failed validation after repair attempt.",
+        logic="No answer produced — LLM output failed schema/safety validation.",
         result_rows=[],
         interpretation_choices=[],
         dq_notes=[],
@@ -272,9 +310,9 @@ def _escalate_soft(question: BusinessQuestion, exc: Exception) -> SQLAgentAnswer
             error_class="output",
             message=str(exc)[:500],
             suggested_action=(
-                "LLM returned content that did not validate after a one-shot repair. "
-                "Inspect the prompt in prompts/sql_agent_system.md and the raw response; "
-                "consider adding a stricter few-shot example or switching to a more capable model."
+                "LLM output did not validate. The state machine will retry "
+                "with a correction context if the unified retry budget allows; "
+                "exhaustion routes to AUDIT_REQUIRED."
             ),
             raw=type(exc).__name__,
         ),

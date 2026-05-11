@@ -19,7 +19,6 @@ from pluang_agent.models import (
     PipelineItem,
     PipelineResult,
     QualityReport,
-    ReviewCategory,
     ReviewDecision,
     ReviewMode,
     SourceProvenance,
@@ -124,7 +123,6 @@ def test_pipeline_item_with_audit_handoff() -> None:
         decision="approve",
         terminal_state=TerminalState.AUDIT_REQUIRED,
         audit_reason="system_error",
-        per_category_retry_counts={ReviewCategory.SOURCE_WRONG: 1},
     )
     handoff = AuditHandoff(
         question_id=answer.question_id,

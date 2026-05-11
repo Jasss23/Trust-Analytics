@@ -39,15 +39,29 @@ class TerminalState(StrEnum):
 
 
 class SystemError(BaseModel):
-    """A non-data failure (auth/quota/transient/output) — distinct from QA flags.
+    """A non-data failure (auth/quota/transient/output/exec/pre_flight/retry) —
+    distinct from QA flags.
 
     When set on an answer, the pipeline halts that question and routes to
     AUDIT_REQUIRED with `audit_reason='system_error'`. The reviewer sees the
-    error class + suggested action; retrying without fixing the integration
-    would just re-fail.
+    error class + suggested action.
+
+    R5: `exec_failure` and `pre_flight_failure` are recoverable in principle
+    — the workflow uses them as retry triggers and only surfaces them on the
+    answer when the unified retry budget is exhausted (then class becomes
+    `auto_retry_exhausted`).
     """
 
-    error_class: Literal["auth", "quota", "transient", "output", "llm_error"]
+    error_class: Literal[
+        "auth",
+        "quota",
+        "transient",
+        "output",
+        "llm_error",
+        "exec_failure",
+        "pre_flight_failure",
+        "auto_retry_exhausted",
+    ]
     message: str
     suggested_action: str
     raw: str | None = None
@@ -206,14 +220,59 @@ class ReviewDecision(BaseModel):
     decision: Literal["approve", "reject"]
     category: ReviewCategory | None = None
     note: str | None = None
-    # Per-category retry counters (Decision 6: retry-once per category).
-    # Stored on the decision so it travels with the item across nodes.
-    per_category_retry_counts: dict[ReviewCategory, int] = Field(default_factory=dict)
     terminal_state: TerminalState | None = None
     # When terminal_state == AUDIT_REQUIRED, audit_reason explains why.
-    # 'system_error' is the absorbed-ESCALATED case; other reasons can be
-    # added (e.g., 'external_disagreement', 'retry_exhausted').
+    # 'system_error' is the absorbed-ESCALATED case; other reasons:
+    # 'external_disagreement', 'retry_exhausted' (R5: unified budget),
+    # 'auto_retry_exhausted'.
     audit_reason: str | None = None
+    # R5: per-category retry counters were removed in favour of a single
+    # unified budget on PipelineItem.remaining_budget. Categories still
+    # drive *what* to do on retry, but not *how many* tries remain.
+
+
+AttemptStatus = Literal[
+    "success",
+    "llm_hard_failure",
+    "llm_soft_failure",
+    "exec_failure",
+    "pre_flight_failure",
+]
+"""Outcome classifications for one run of run_one_attempt (R5)."""
+
+
+class CorrectionContext(BaseModel):
+    """Carried into the next SQL Agent attempt when retrying after a failure.
+
+    The agent's user prompt grows a `## Correction` block built from these
+    fields. Schema-grounded retry (R5): `schema_hint` carries live PRAGMA
+    table_info output for the tables referenced by the previous attempt, so
+    the agent sees actual columns rather than guessing.
+    """
+
+    prev_sql: str
+    failure_kind: Literal[
+        "llm_soft_failure",
+        "exec_failure",
+        "pre_flight_failure",
+        "human_reject",
+    ]
+    failure_detail: str
+    schema_hint: str | None = None
+    reviewer_note: str | None = None
+
+
+class AttemptOutcome(BaseModel):
+    """One pass through run_one_attempt: LLM call → execute → pre-flight.
+
+    Always carries an `answer`. The `status` distinguishes success from the
+    several retry-eligible failure modes; `correction_context` is set iff
+    the status is retry-eligible.
+    """
+
+    answer: SQLAgentAnswer
+    status: AttemptStatus
+    correction_context: CorrectionContext | None = None
 
 
 class AuditHandoff(BaseModel):
@@ -228,6 +287,7 @@ class AuditHandoff(BaseModel):
     quality_reports: list[QualityReport]
     reject_history: list[ReviewDecision]
     unresolved_questions: list[str]
+    attempts: list[AttemptOutcome] = Field(default_factory=list)
 
 
 class PipelineItem(BaseModel):
@@ -238,6 +298,14 @@ class PipelineItem(BaseModel):
     reinvestigated_answer: SQLAgentAnswer | None = None
     reinvestigated_quality_report: QualityReport | None = None
     audit_handoff: AuditHandoff | None = None
+    # R5: unified retry budget governing auto-retries (exec / pre-flight)
+    # AND human-rejection retries. Starts at auto_retry_budget, decremented
+    # on each retry. Exhaustion → AUDIT_REQUIRED with auto_retry_exhausted.
+    auto_retry_budget: int = 2
+    remaining_budget: int = 2
+    # All attempts made for this question, including the successful one.
+    # Populated by the workflow; surfaced in AuditHandoff.attempts.
+    attempts: list[AttemptOutcome] = Field(default_factory=list)
 
 
 class PipelineResult(BaseModel):

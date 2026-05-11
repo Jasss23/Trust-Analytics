@@ -1,12 +1,17 @@
 """LangGraph orchestration for the analytics pipeline.
 
-Per Decision 6: 4-category reject routing, per-category retry counter (limit 1),
-external_disagreement → audit_required immediately, retry-exhausted →
-audit_required, system_error → audit_required(reason='system_error').
+R5: Unified retry budget on PipelineItem.remaining_budget covers
+schema-grounded SQL exec retry, pre-flight retry, AND human-rejection
+retry. Categories still drive *what* to do on human reject; the budget
+governs *how many* tries are left.
+
+Per Decision 6: 4-category reject routing, external_disagreement →
+audit_required immediately, retry-exhausted → audit_required,
+system_error → audit_required(reason='system_error').
 
 audit_required emits a hand-off package, not a 'failed' state. The package
-contains all attempted answers, all reject notes, and unresolved_questions
-(seeded from Layer C of the latest QA report).
+contains all attempted answers, all reject notes, all per-attempt outcomes,
+and unresolved_questions (seeded from Layer C of the latest QA report).
 """
 
 from __future__ import annotations
@@ -19,8 +24,10 @@ from langgraph.graph import END, StateGraph
 from pluang_agent.agents.quality_agent import QualityAgent
 from pluang_agent.agents.sql_agent import SQLAgent
 from pluang_agent.models import (
+    AttemptOutcome,
     AuditHandoff,
     BusinessQuestion,
+    CorrectionContext,
     PipelineItem,
     PipelineResult,
     QualityReport,
@@ -31,6 +38,7 @@ from pluang_agent.models import (
     TerminalState,
 )
 from pluang_agent.review import collect_review_decisions, summarize_terminal_states
+from pluang_agent.sql_attempt import mark_budget_exhausted, run_one_attempt
 
 
 class PipelineState(TypedDict, total=False):
@@ -47,16 +55,45 @@ def run_pipeline(
     review_mode: ReviewMode,
 ) -> PipelineResult:
     graph = StateGraph(PipelineState)
+    registry = sql_agent.metrics_registry
+    db_path = sql_agent.db_path
 
     def answer_questions(state: PipelineState) -> dict[str, Any]:
         items: list[PipelineItem] = []
         for question in state["questions"]:
-            answer = sql_agent.answer(question)
+            attempts: list[AttemptOutcome] = []
+            budget = 2  # R5: unified initial budget for one PipelineItem
+            correction: CorrectionContext | None = None
+            outcome: AttemptOutcome
+            while True:
+                outcome = run_one_attempt(
+                    sql_agent=sql_agent,
+                    question=question,
+                    db_path=db_path,
+                    registry=registry,
+                    correction_context=correction,
+                )
+                attempts.append(outcome)
+                if outcome.status == "success":
+                    break
+                if outcome.status == "llm_hard_failure":
+                    # Auth/quota/transient — don't retry, escalate via existing
+                    # system_error path.
+                    break
+                if budget <= 0:
+                    mark_budget_exhausted(outcome.answer, outcome)
+                    break
+                budget -= 1
+                correction = outcome.correction_context
+            final_answer = outcome.answer
             items.append(
                 PipelineItem(
                     question=question,
-                    answer=answer,
-                    quality_report=quality_agent.assess(answer),
+                    answer=final_answer,
+                    quality_report=quality_agent.assess(final_answer),
+                    auto_retry_budget=2,
+                    remaining_budget=budget,
+                    attempts=attempts,
                 )
             )
         return {"items": items}
@@ -67,17 +104,20 @@ def run_pipeline(
         for item in state["items"]:
             decision = by_id[item.question.id]
             item.review_decision = decision
-            # System errors fold into AUDIT_REQUIRED with audit_reason set,
-            # regardless of the reviewer demo decision (you can't approve a
-            # non-answer).
+            # System errors fold into AUDIT_REQUIRED regardless of demo decision —
+            # you can't approve a non-answer.
             if item.answer.system_error is not None:
                 decision.terminal_state = TerminalState.AUDIT_REQUIRED
-                decision.audit_reason = "system_error"
+                if item.answer.system_error.error_class == "auto_retry_exhausted":
+                    decision.audit_reason = "auto_retry_exhausted"
+                else:
+                    decision.audit_reason = "system_error"
                 item.audit_handoff = _build_audit_handoff(
                     item.question.id,
                     [item.answer],
                     [item.quality_report],
                     [decision],
+                    item.attempts,
                 )
         return {"decisions": decisions, "items": state["items"]}
 
@@ -87,7 +127,7 @@ def run_pipeline(
             if not decision or decision.decision == "approve":
                 continue
             if decision.terminal_state == TerminalState.AUDIT_REQUIRED:
-                # Already routed (system_error or earlier audit) — skip.
+                # Already routed (system_error / auto_retry_exhausted / earlier audit).
                 continue
 
             category = decision.category
@@ -95,29 +135,39 @@ def run_pipeline(
                 _route_to_audit(item, decision, reason="external_disagreement")
                 continue
 
-            # Per-category retry counter — Decision 6.
-            already_tried = decision.per_category_retry_counts.get(category, 0) if category else 0
-            if already_tried >= 1:
+            # R5: unified budget. If exhausted, route to audit_required.
+            if item.remaining_budget <= 0:
                 _route_to_audit(item, decision, reason="retry_exhausted")
                 continue
-            if category is not None:
-                decision.per_category_retry_counts[category] = already_tried + 1
+            item.remaining_budget -= 1
 
             if category == ReviewCategory.QA_INSUFFICIENT:
-                # Re-run QA only (Layer B+C in spirit; R1 stub re-runs the
-                # full assess). The SQL Agent answer is unchanged.
+                # Re-run QA only — SQL answer unchanged.
                 item.reinvestigated_answer = item.answer
                 item.reinvestigated_quality_report = quality_agent.assess(item.answer)
             else:
                 # answer_wrong / source_wrong — re-prompt SQL Agent with the
-                # reviewer note in scope. R2 will further differentiate
-                # source_wrong (pin alt source) from answer_wrong.
-                item.reinvestigated_answer = sql_agent.answer(
-                    item.question, reviewer_note=decision.note
+                # reviewer note as the correction context, then re-run QA.
+                correction = CorrectionContext(
+                    prev_sql=item.answer.sql,
+                    failure_kind="human_reject",
+                    failure_detail=(
+                        f"Reviewer rejected (category={category.value if category else 'unknown'})."
+                    ),
+                    schema_hint=None,
+                    reviewer_note=decision.note,
                 )
-                item.reinvestigated_quality_report = quality_agent.assess(
-                    item.reinvestigated_answer
+                outcome = run_one_attempt(
+                    sql_agent=sql_agent,
+                    question=item.question,
+                    db_path=db_path,
+                    registry=registry,
+                    correction_context=correction,
+                    reviewer_note=decision.note,
                 )
+                item.attempts.append(outcome)
+                item.reinvestigated_answer = outcome.answer
+                item.reinvestigated_quality_report = quality_agent.assess(outcome.answer)
             decision.terminal_state = TerminalState.REINVESTIGATED
         return {"items": state["items"]}
 
@@ -156,7 +206,7 @@ def _route_to_audit(
     if item.reinvestigated_quality_report is not None:
         reports.append(item.reinvestigated_quality_report)
     item.audit_handoff = _build_audit_handoff(
-        item.question.id, answers, reports, [decision]
+        item.question.id, answers, reports, [decision], item.attempts
     )
 
 
@@ -165,6 +215,7 @@ def _build_audit_handoff(
     attempted_answers: list[SQLAgentAnswer],
     quality_reports: list[QualityReport],
     reject_history: list[ReviewDecision],
+    attempts: list[AttemptOutcome],
 ) -> AuditHandoff:
     """Hand-off package per Decision 6. unresolved_questions seeded from the
     latest Layer C; if none, populated with a generic placeholder so the
@@ -180,6 +231,7 @@ def _build_audit_handoff(
         quality_reports=quality_reports,
         reject_history=reject_history,
         unresolved_questions=unresolved,
+        attempts=attempts,
     )
 
 
@@ -220,8 +272,12 @@ def _review_log(result: PipelineResult) -> str:
         if decision and decision.category:
             lines.append(f"Category: {decision.category.value}")
             lines.append(f"Note: {decision.note}")
-        if decision and decision.per_category_retry_counts:
-            lines.append(f"Retry counts: {dict(decision.per_category_retry_counts)}")
+        lines.append(
+            f"Retry budget: used {item.auto_retry_budget - item.remaining_budget}/"
+            f"{item.auto_retry_budget} (remaining {item.remaining_budget})"
+        )
+        if item.attempts:
+            lines.append(f"Attempts: {[a.status for a in item.attempts]}")
         if decision and decision.terminal_state:
             lines.append(f"Terminal state: {decision.terminal_state.value}")
         if decision and decision.audit_reason:

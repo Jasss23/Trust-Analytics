@@ -8,6 +8,7 @@ Variables (replaced in Python before sending):
 - {question_metric}    — Concise metric name
 - {question_period}    — Time period (e.g. "October 2025")
 - {reviewer_note}      — Empty string, or a reviewer note for reinvestigation
+- {correction_block}   — Empty on the first attempt; populated on retries (## Correction block)
 
 ---
 
@@ -31,7 +32,8 @@ Question id: {question_id}
 Metric: {question_metric}
 Period: {question_period}
 {reviewer_note}
+{correction_block}
 
 ## Instructions
 
-Follow the process from the system prompt: identify the registry entry above, use its primary source by default, apply its extra_filters, comply with the ⚠️ warnings on your chosen table, and surface ambiguity via interpretation_choices when applicable. Return ONLY the JSON object — no explanation before or after.
+Follow the Process from the system prompt: identify the registry entry above, use its primary source by default, apply its extra_filters, comply with the ⚠️ warnings on your chosen table, and surface ambiguity via interpretation_choices when applicable. If a `## Correction` block is present, address its specific failure detail rather than re-emitting the previous SQL. Return ONLY the JSON object — no explanation before or after.
