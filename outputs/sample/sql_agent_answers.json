@@ -1,7 +1,7 @@
 [
   {
     "assumptions": [
-      "The data for October 2025 is complete and accurate in the fct_trading_daily table."
+      "All transactions in October 2025 are completed and included in fct_trading_daily."
     ],
     "dq_notes": [],
     "filters": [
@@ -9,28 +9,28 @@
       "transaction_date < '2025-11-01'"
     ],
     "interpretation_choices": [],
-    "logic": "The SQL aggregates the gross transaction value in IDR by asset class for the specified date range using SUM.",
+    "logic": "The SQL aggregates the gross transaction value in IDR by asset class for completed transactions in October 2025.",
     "metric_name": "gtv_idr_by_asset_class",
     "metric_value": [
       {
         "asset_class": "crypto",
-        "total_gtv_idr": 18266056774
+        "gtv_idr": 18266056774
       },
       {
         "asset_class": "fx",
-        "total_gtv_idr": 4200105434
+        "gtv_idr": 4200105434
       },
       {
         "asset_class": "gold",
-        "total_gtv_idr": 7726000162
+        "gtv_idr": 7726000162
       },
       {
         "asset_class": "gss",
-        "total_gtv_idr": 6079313037
+        "gtv_idr": 6079313037
       },
       {
         "asset_class": "options",
-        "total_gtv_idr": 1868303555
+        "gtv_idr": 1868303555
       }
     ],
     "period": "October 2025",
@@ -39,23 +39,23 @@
     "result_rows": [
       {
         "asset_class": "crypto",
-        "total_gtv_idr": 18266056774
+        "gtv_idr": 18266056774
       },
       {
         "asset_class": "fx",
-        "total_gtv_idr": 4200105434
+        "gtv_idr": 4200105434
       },
       {
         "asset_class": "gold",
-        "total_gtv_idr": 7726000162
+        "gtv_idr": 7726000162
       },
       {
         "asset_class": "gss",
-        "total_gtv_idr": 6079313037
+        "gtv_idr": 6079313037
       },
       {
         "asset_class": "options",
-        "total_gtv_idr": 1868303555
+        "gtv_idr": 1868303555
       }
     ],
     "source": {
@@ -64,16 +64,16 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Trace through the Process: I read the registry's primary, which is fct_trading_daily, applied the period filters for transaction_date, and complied with the warning that status=completed is already applied. I chose SUM as the aggregator for gtv_idr since it represents the total gross transaction value."
+      "why_chosen": "Trace through the Process: I read the registry's primary source as fct_trading_daily, applied the period filter on transaction_date, and complied with the warning that status=completed is already applied in this table. I chose SUM as the aggregator for gtv_idr since it represents the total gross transaction value."
     },
-    "sql": "SELECT asset_class, SUM(gtv_idr) AS total_gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class",
+    "sql": "SELECT asset_class, SUM(gtv_idr) AS gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class",
     "system_error": null,
     "usage": {
-      "completion_tokens": 344,
-      "cost": null,
-      "model": "gpt-4o-mini",
-      "prompt_tokens": 3885,
-      "total_tokens": 4229
+      "completion_tokens": 345,
+      "cost": 0.00055095,
+      "model": "openai/gpt-4o-mini",
+      "prompt_tokens": 4469,
+      "total_tokens": 4814
     },
     "warnings": []
   },
@@ -87,11 +87,11 @@
       "transaction_date < '2025-11-01'"
     ],
     "interpretation_choices": [],
-    "logic": "The SQL aggregates the total Gross Transaction Value in USD for completed transactions in October 2025.",
+    "logic": "The SQL aggregates the total gross transaction value in USD for completed transactions in October 2025.",
     "metric_name": "total_gtv_usd",
     "metric_value": [
       {
-        "total_gtv_usd": 2339863.74
+        "gtv_usd": 2339863.74
       }
     ],
     "period": "October 2025",
@@ -99,7 +99,7 @@
     "question_id": "q2_gtv_usd_oct_2025",
     "result_rows": [
       {
-        "total_gtv_usd": 2339863.74
+        "gtv_usd": 2339863.74
       }
     ],
     "source": {
@@ -108,45 +108,46 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Trace through the Process: I read the registry's primary, which is fct_trading_daily, applied the period filter on transaction_date, complied with the warning that status=completed is already applied, and picked SUM as the aggregator for gtv_usd since it is a pre-aggregated daily mart."
+      "why_chosen": "Trace through the Process: I read the registry's primary source as fct_trading_daily, applied the period filter on transaction_date, and complied with the \u26a0\ufe0f warning that status=completed is already applied. I chose SUM as the aggregator for gtv_usd since it represents the total gross transaction value."
     },
-    "sql": "SELECT SUM(gtv_usd) AS total_gtv_usd FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'",
+    "sql": "SELECT SUM(gtv_usd) AS gtv_usd FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'",
     "system_error": null,
     "usage": {
-      "completion_tokens": 327,
-      "cost": null,
-      "model": "gpt-4o-mini",
-      "prompt_tokens": 3867,
-      "total_tokens": 4194
+      "completion_tokens": 328,
+      "cost": 0.0005319,
+      "model": "openai/gpt-4o-mini",
+      "prompt_tokens": 4410,
+      "total_tokens": 4738
     },
     "warnings": []
   },
   {
     "assumptions": [
       "The data for October 2025 is complete and accurate.",
-      "The Total row in agg_monthly_biz_summary correctly aggregates MTU."
+      "The definitions of MTU from different sources are understood and accepted as valid."
     ],
     "dq_notes": [],
     "filters": [
-      "month >= '2025-10-01'",
-      "month < '2025-11-01'",
+      "month >= '2025-10-01' AND month < '2025-11-01'",
       "asset_class = 'Total'"
     ],
     "interpretation_choices": [
       {
         "alternatives": [
-          "Raw distinct completed traders from raw_transactions",
-          "Mixpanel client-side MTU from mart_ops_dashboard"
+          "raw_completed_unique_traders",
+          "mixpanel_mtu"
         ],
-        "choice": "AUM-derived MTU from agg_monthly_biz_summary",
-        "rationale": "Different definitions of MTU are provided: AUM-derived, raw-completed-traders, and Mixpanel."
+        "choice": "aum_defined_mtu",
+        "rationale": "Different definitions of MTU are provided for comparison: AUM-derived, raw completed traders, and Mixpanel estimates."
       }
     ],
-    "logic": "The SQL aggregates the Monthly Transacting Users (MTU) by summing the values from the Total row for October 2025.",
+    "logic": "The SQL aggregates MTU from the canonical source and counts distinct completed transactions from the raw transactions table, while also retrieving Mixpanel MTU for comparison.",
     "metric_name": "monthly_transacting_users",
     "metric_value": [
       {
-        "mtu": 12453
+        "aum_defined_mtu": "12453",
+        "mixpanel_mtu": "8882",
+        "raw_completed_unique_traders": 9239
       }
     ],
     "period": "October 2025",
@@ -154,7 +155,9 @@
     "question_id": "q3_mtu_oct_2025",
     "result_rows": [
       {
-        "mtu": 12453
+        "aum_defined_mtu": "12453",
+        "mixpanel_mtu": "8882",
+        "raw_completed_unique_traders": 9239
       }
     ],
     "source": {
@@ -163,16 +166,16 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "agg_monthly_biz_summary",
-      "why_chosen": "Trace through the Process: I read the registry's primary, applied period and extra_filters, complied with \u26a0\ufe0f warning(s) on the chosen table, and picked aggregator according to the column's grain."
+      "why_chosen": "Trace through the Process: I read the registry's primary source as agg_monthly_biz_summary, applied the period filter for October 2025, and included the extra filter for asset_class = 'Total'. This table is the canonical source for MTU as per the registry."
     },
-    "sql": "SELECT SUM(mtu) AS mtu FROM agg_monthly_biz_summary WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total'",
+    "sql": "SELECT\n    mtu AS aum_defined_mtu,\n    (SELECT COUNT(DISTINCT user_id) FROM raw_transactions WHERE status = 'completed' AND transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01') AS raw_completed_unique_traders,\n    (SELECT mtu_mixpanel FROM mart_ops_dashboard WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS mixpanel_mtu\nFROM agg_monthly_biz_summary\nWHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total'",
     "system_error": null,
     "usage": {
-      "completion_tokens": 403,
-      "cost": null,
-      "model": "gpt-4o-mini",
-      "prompt_tokens": 3901,
-      "total_tokens": 4304
+      "completion_tokens": 509,
+      "cost": 0.00065235,
+      "model": "openai/gpt-4o-mini",
+      "prompt_tokens": 4489,
+      "total_tokens": 4998
     },
     "warnings": []
   },
@@ -186,7 +189,7 @@
       "transaction_date < '2025-11-01'"
     ],
     "interpretation_choices": [],
-    "logic": "The SQL aggregates the total transaction count by asset class for the month of October 2025 using the SUM function.",
+    "logic": "The SQL aggregates the total transaction count by asset class for the specified date range using the SUM function.",
     "metric_name": "transaction_count_by_asset_class",
     "metric_value": [
       {
@@ -241,22 +244,23 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Trace through the Process: I read the registry's primary, which is fct_trading_daily, applied the period filter on transaction_date, complied with the warning that status=completed is already applied, and picked SUM as the aggregator for transaction_count since it is a pre-aggregated daily mart."
+      "why_chosen": "Trace through the Process: I read the registry's primary source as fct_trading_daily, applied the period filter on transaction_date, and complied with the warning that status=completed is already applied. I chose SUM as the aggregator for transaction_count since it is a pre-aggregated daily mart column."
     },
     "sql": "SELECT asset_class, SUM(transaction_count) AS transaction_count FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class",
     "system_error": null,
     "usage": {
-      "completion_tokens": 332,
-      "cost": null,
-      "model": "gpt-4o-mini",
-      "prompt_tokens": 3858,
-      "total_tokens": 4190
+      "completion_tokens": 331,
+      "cost": 0.00086175,
+      "model": "openai/gpt-4o-mini",
+      "prompt_tokens": 4421,
+      "total_tokens": 4752
     },
     "warnings": []
   },
   {
     "assumptions": [
-      "The data in fct_trading_daily is accurate and reflects completed transactions only."
+      "The data for the months in question is complete and accurate.",
+      "The aggregation logic correctly reflects the month-on-month changes."
     ],
     "dq_notes": [],
     "filters": [
@@ -264,20 +268,26 @@
       "transaction_date < '2026-01-01'"
     ],
     "interpretation_choices": [],
-    "logic": "The SQL aggregates the gross transaction value in IDR by month from the fct_trading_daily table.",
+    "logic": "The SQL aggregates GTV in IDR for each month and calculates the month-on-month change in both absolute and percentage terms.",
     "metric_name": "gtv_idr_month_on_month_trend",
     "metric_value": [
       {
-        "month_bucket": "2025-10",
-        "total_gtv_idr": 38139778962
+        "gtv_idr": 38139778962,
+        "mom_change_idr": null,
+        "mom_change_pct": null,
+        "month": "2025-10"
       },
       {
-        "month_bucket": "2025-11",
-        "total_gtv_idr": 38704082670
+        "gtv_idr": 38704082670,
+        "mom_change_idr": 564303708,
+        "mom_change_pct": 1.4795673267069418,
+        "month": "2025-11"
       },
       {
-        "month_bucket": "2025-12",
-        "total_gtv_idr": 38604717992
+        "gtv_idr": 38604717992,
+        "mom_change_idr": -99364678,
+        "mom_change_pct": -0.2567291901663355,
+        "month": "2025-12"
       }
     ],
     "period": "October 2025 to December 2025",
@@ -285,16 +295,22 @@
     "question_id": "q5_gtv_mom_trend_oct_dec_2025",
     "result_rows": [
       {
-        "month_bucket": "2025-10",
-        "total_gtv_idr": 38139778962
+        "gtv_idr": 38139778962,
+        "mom_change_idr": null,
+        "mom_change_pct": null,
+        "month": "2025-10"
       },
       {
-        "month_bucket": "2025-11",
-        "total_gtv_idr": 38704082670
+        "gtv_idr": 38704082670,
+        "mom_change_idr": 564303708,
+        "mom_change_pct": 1.4795673267069418,
+        "month": "2025-11"
       },
       {
-        "month_bucket": "2025-12",
-        "total_gtv_idr": 38604717992
+        "gtv_idr": 38604717992,
+        "mom_change_idr": -99364678,
+        "mom_change_pct": -0.2567291901663355,
+        "month": "2025-12"
       }
     ],
     "source": {
@@ -302,16 +318,16 @@
         "agg_monthly_biz_summary"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Trace through the Process: I read the registry's primary, which is fct_trading_daily, applied the period filter on transaction_date, complied with the warning that status=completed is already applied, and picked SUM as the aggregator for gtv_idr since it is a pre-aggregated daily mart."
+      "why_chosen": "Trace through the Process: I read the registry's primary source as fct_trading_daily, applied the period filter on transaction_date, complied with the warning to use SUM for gtv_idr, and there are no extra filters to apply."
     },
-    "sql": "SELECT strftime('%Y-%m', transaction_date) AS month_bucket, SUM(gtv_idr) AS total_gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2026-01-01' GROUP BY month_bucket ORDER BY month_bucket;",
+    "sql": "WITH primary_source AS (SELECT strftime('%Y-%m', transaction_date) AS month, SUM(gtv_idr) AS gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2026-01-01' GROUP BY month), comparison_source AS (SELECT strftime('%Y-%m', month) AS month, SUM(gtv_idr) AS gtv_idr FROM agg_monthly_biz_summary WHERE month >= '2025-10-01' AND month < '2026-01-01' AND asset_class = 'Total' GROUP BY month) SELECT p.month, p.gtv_idr, (p.gtv_idr - lag(p.gtv_idr) OVER (ORDER BY p.month)) AS mom_change_idr, (100.0 * (p.gtv_idr - lag(p.gtv_idr) OVER (ORDER BY p.month)) / lag(p.gtv_idr) OVER (ORDER BY p.month)) AS mom_change_pct FROM primary_source p",
     "system_error": null,
     "usage": {
-      "completion_tokens": 358,
-      "cost": null,
-      "model": "gpt-4o-mini",
-      "prompt_tokens": 3857,
-      "total_tokens": 4215
+      "completion_tokens": 511,
+      "cost": 0.00063675,
+      "model": "openai/gpt-4o-mini",
+      "prompt_tokens": 4377,
+      "total_tokens": 4888
     },
     "warnings": []
   }

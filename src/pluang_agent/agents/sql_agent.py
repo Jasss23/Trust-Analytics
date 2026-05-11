@@ -36,6 +36,7 @@ from pluang_agent.metrics import MetricEntry, MetricsRegistry, SourceSpec
 from pluang_agent.models import (
     BusinessQuestion,
     CorrectionContext,
+    QuestionPlan,
     SQLAgentAnswer,
     SystemError,
 )
@@ -68,6 +69,7 @@ class SQLAgent:
     def answer(
         self,
         question: BusinessQuestion,
+        question_plan: QuestionPlan | None = None,
         reviewer_note: str | None = None,
         correction_context: CorrectionContext | None = None,
     ) -> SQLAgentAnswer:
@@ -80,7 +82,7 @@ class SQLAgent:
         vs. immediate escalation.
         """
         try:
-            return self._attempt_once(question, reviewer_note, correction_context)
+            return self._attempt_once(question, question_plan, reviewer_note, correction_context)
         except HARD_ERROR_TYPES as exc:
             return _escalate_hard(question, exc)
         except (LLMOutputError, ValidationError, json.JSONDecodeError, SQLSafetyError) as exc:
@@ -91,11 +93,12 @@ class SQLAgent:
     def _attempt_once(
         self,
         question: BusinessQuestion,
+        question_plan: QuestionPlan | None,
         reviewer_note: str | None,
         correction_context: CorrectionContext | None,
     ) -> SQLAgentAnswer:
         system = _load_system_prompt()
-        user = self._build_user_prompt(question, reviewer_note, correction_context)
+        user = self._build_user_prompt(question, question_plan, reviewer_note, correction_context)
         stage = (
             f"sql_agent:{question.id}"
             if correction_context is None
@@ -117,6 +120,7 @@ class SQLAgent:
     def _build_user_prompt(
         self,
         question: BusinessQuestion,
+        question_plan: QuestionPlan | None,
         reviewer_note: str | None,
         correction_context: CorrectionContext | None,
     ) -> str:
@@ -134,6 +138,7 @@ class SQLAgent:
             template_body
             .replace("{schema_context}", schema_ctx)
             .replace("{registry_entry}", registry_entry)
+            .replace("{question_plan}", _render_question_plan(question_plan))
             .replace("{question_text}", question.text)
             .replace("{question_id}", question.id)
             .replace("{question_metric}", question.metric)
@@ -141,6 +146,12 @@ class SQLAgent:
             .replace("{reviewer_note}", reviewer_block)
             .replace("{correction_block}", correction_block)
         )
+
+
+def _render_question_plan(plan: QuestionPlan | None) -> str:
+    if plan is None:
+        return "(no validated question plan — use registry and schema context directly)"
+    return plan.model_dump_json(indent=2)
 
 
 def _render_correction_block(correction: CorrectionContext | None) -> str:

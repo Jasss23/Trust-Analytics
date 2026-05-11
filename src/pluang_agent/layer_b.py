@@ -24,6 +24,10 @@ from pluang_agent.models import (
     CrossSourceFinding,
     Hypothesis,
     LayerBReport,
+    PlanBreakdown,
+    PlanPeriod,
+    PlanSource,
+    QuestionPlan,
     SQLAgentAnswer,
 )
 from pluang_agent.sql_runner import execute_read_only
@@ -36,6 +40,7 @@ def run_layer_b(
     answer: SQLAgentAnswer,
     registry: MetricsRegistry,
     llm_client: LLMClient | None = None,
+    question_plan: QuestionPlan | None = None,
 ) -> LayerBReport:
     """Generic cross-source reconciliation.
 
@@ -44,6 +49,8 @@ def run_layer_b(
     """
     entry = registry.get(answer.question_id)
     if entry is None:
+        if question_plan is not None and question_plan.comparison_sources:
+            return _run_plan_driven_layer_b(db_path, question_plan)
         return LayerBReport(
             verdict="NOT_APPLICABLE",
             hypothesis_absence_note=f"No metrics.yml entry for {answer.question_id}.",
@@ -151,6 +158,66 @@ def run_layer_b(
     )
 
 
+def _run_plan_driven_layer_b(db_path: Path, plan: QuestionPlan) -> LayerBReport:
+    try:
+        primary_values = _execute_plan_source(
+            db_path,
+            plan.period,
+            plan.primary_source,
+            plan.breakdown,
+        )
+    except Exception as exc:
+        return LayerBReport(
+            verdict="NOT_APPLICABLE",
+            hypothesis_absence_note=f"Plan primary source execution failed: {type(exc).__name__}: {exc}",
+        )
+
+    findings: list[CrossSourceFinding] = [
+        CrossSourceFinding(
+            source=f"{plan.primary_source.table}.{plan.primary_source.column} (plan primary)",
+            value=_serialise_values(primary_values),
+            delta_vs_primary=0.0,
+            notes=plan.primary_source.reason,
+        )
+    ]
+    max_abs_delta_pct = 0.0
+    for src in plan.comparison_sources:
+        try:
+            values = _execute_plan_source(db_path, plan.period, src, plan.breakdown)
+        except Exception as exc:
+            findings.append(
+                CrossSourceFinding(
+                    source=f"{src.table}.{src.column}",
+                    value=None,
+                    delta_vs_primary=None,
+                    notes=f"Execution failed: {type(exc).__name__}: {exc}",
+                )
+            )
+            continue
+        delta = _max_abs_delta_pct(primary_values, values)
+        max_abs_delta_pct = max(max_abs_delta_pct, delta)
+        findings.append(
+            CrossSourceFinding(
+                source=f"{src.table}.{src.column}",
+                value=_serialise_values(values),
+                delta_vs_primary=round(delta, 4),
+                notes=src.reason,
+            )
+        )
+    verdict = "DISAGREEMENT" if max_abs_delta_pct > 1.0 else "AGREE"
+    absence = (
+        "Plan-driven reconciliation found source disagreement; no registry-level "
+        "notes were available for a grounded hypothesis."
+        if verdict == "DISAGREEMENT"
+        else "Plan comparison sources agree within threshold."
+    )
+    return LayerBReport(
+        cross_source_findings=findings,
+        verdict=verdict,
+        hypothesis_absence_note=absence,
+    )
+
+
 # ---------------------------------------------------------------------------
 # SQL building and execution
 # ---------------------------------------------------------------------------
@@ -185,6 +252,51 @@ def _execute_source(db_path: Path, entry: MetricEntry, src: SourceSpec) -> dict[
                 out[key] = f
                 break
     return out
+
+
+def _execute_plan_source(
+    db_path: Path,
+    period: PlanPeriod,
+    src: PlanSource,
+    breakdown: PlanBreakdown | None,
+) -> dict[str, float]:
+    where_parts = [
+        f"{src.period_column} >= '{period.start}'",
+        f"{src.period_column} < '{period.end}'",
+    ]
+    where_parts.extend(src.extra_filters)
+    if breakdown is not None:
+        for member in breakdown.exclude_aggregate_members:
+            where_parts.append(f"{breakdown.dimension} != '{member}'")
+    where_clause = " AND ".join(where_parts)
+
+    if src.aggregator == "SUM":
+        agg_expr = f"ROUND(SUM(CAST({src.column} AS REAL)), 4)"
+    elif src.aggregator == "COUNT_DISTINCT":
+        agg_expr = f"COUNT(DISTINCT {src.column})"
+    elif src.aggregator == "RAW":
+        agg_expr = src.column
+    else:
+        raise ValueError(f"Unknown aggregator: {src.aggregator}")
+
+    if breakdown is not None:
+        sql = (
+            f"SELECT {breakdown.dimension} AS bd_key, {agg_expr} AS bd_value "
+            f"FROM {src.table} WHERE {where_clause} "
+            f"GROUP BY {breakdown.dimension} ORDER BY {breakdown.dimension}"
+        )
+        rows = execute_read_only(db_path, sql)
+        return {
+            str(row["bd_key"]): float(row["bd_value"])
+            for row in rows
+            if _to_float(row.get("bd_value")) is not None
+        }
+
+    sql = f"SELECT {agg_expr} AS bd_value FROM {src.table} WHERE {where_clause}"
+    rows = execute_read_only(db_path, sql)
+    if not rows:
+        return {"_total_": 0.0}
+    return {"_total_": _to_float(rows[0].get("bd_value")) or 0.0}
 
 
 def _build_sql(entry: MetricEntry, src: SourceSpec) -> tuple[str, str | None]:

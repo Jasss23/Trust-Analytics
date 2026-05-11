@@ -23,6 +23,7 @@ from pluang_agent.models import (
     AttemptOutcome,
     BusinessQuestion,
     CorrectionContext,
+    QuestionPlan,
     SQLAgentAnswer,
 )
 from pluang_agent.pre_flight import pre_flight_check
@@ -36,6 +37,7 @@ def run_one_attempt(
     question: BusinessQuestion,
     db_path: Path,
     registry: MetricsRegistry,
+    question_plan: QuestionPlan | None = None,
     correction_context: CorrectionContext | None = None,
     reviewer_note: str | None = None,
 ) -> AttemptOutcome:
@@ -49,6 +51,7 @@ def run_one_attempt(
     """
     answer = sql_agent.answer(
         question,
+        question_plan=question_plan,
         reviewer_note=reviewer_note,
         correction_context=correction_context,
     )
@@ -94,11 +97,10 @@ def run_one_attempt(
         )
 
     answer.result_rows = rows
-    if answer.metric_value is None:
-        answer.metric_value = rows
+    answer.metric_value = rows
 
     # Pre-flight gate — before QA sees the answer.
-    pre = pre_flight_check(answer, question, registry)
+    pre = pre_flight_check(answer, question, registry, question_plan=question_plan)
     if not pre.passed:
         return AttemptOutcome(
             answer=answer,

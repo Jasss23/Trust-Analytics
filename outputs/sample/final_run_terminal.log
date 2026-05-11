@@ -1,0 +1,27 @@
+All checks passed!
+.......................................................................  [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/langgraph/cache/base/__init__.py:8
+  /Users/jiashunpang/projects/ai/pluang/.venv/lib/python3.13/site-packages/langgraph/cache/base/__init__.py:8: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or 'core') to suppress this warning.
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+71 passed, 1 warning in 1.59s
+
+Pipeline Result — demo-reject
+Question                               Review   Terminal        Trust
+q1_gtv_idr_by_asset_oct_2025           approve  approved        RED
+q2_gtv_usd_oct_2025                    approve  approved        RED
+q3_mtu_oct_2025                        approve  approved        YELLOW
+q4_transaction_count_by_asset_oct_2025 approve  approved        RED
+q5_gtv_mom_trend_oct_dec_2025          reject   audit_required  RED
+Outputs written to: outputs/sample
+
+Pipeline Result — demo-approve
+Question                               Review   Terminal  Trust
+q1_gtv_idr_by_asset_oct_2025           approve  approved  RED
+q2_gtv_usd_oct_2025                    approve  approved  RED
+q3_mtu_oct_2025                        approve  approved  YELLOW
+q4_transaction_count_by_asset_oct_2025 approve  approved  RED
+q5_gtv_mom_trend_oct_dec_2025          approve  approved  RED
+Outputs written to: outputs/sample

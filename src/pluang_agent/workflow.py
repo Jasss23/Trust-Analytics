@@ -35,8 +35,10 @@ from pluang_agent.models import (
     ReviewDecision,
     ReviewMode,
     SQLAgentAnswer,
+    SystemError,
     TerminalState,
 )
+from pluang_agent.planner import plan_question
 from pluang_agent.review import collect_review_decisions, summarize_terminal_states
 from pluang_agent.sql_attempt import mark_budget_exhausted, run_one_attempt
 
@@ -57,10 +59,28 @@ def run_pipeline(
     graph = StateGraph(PipelineState)
     registry = sql_agent.metrics_registry
     db_path = sql_agent.db_path
+    metadata = sql_agent.metadata
 
     def answer_questions(state: PipelineState) -> dict[str, Any]:
         items: list[PipelineItem] = []
         for question in state["questions"]:
+            planned = plan_question(question, registry, metadata)
+            if planned.system_error is not None or planned.plan is None:
+                answer = _planner_error_answer(question, planned.system_error)
+                qa_report = quality_agent.assess(answer)
+                items.append(
+                    PipelineItem(
+                        question=question,
+                        question_plan=None,
+                        answer=answer,
+                        quality_report=qa_report,
+                        auto_retry_budget=2,
+                        remaining_budget=2,
+                        attempts=[],
+                    )
+                )
+                continue
+            question_plan = planned.plan
             attempts: list[AttemptOutcome] = []
             budget = 2  # R5: unified initial budget for one PipelineItem
             correction: CorrectionContext | None = None
@@ -71,6 +91,7 @@ def run_pipeline(
                     question=question,
                     db_path=db_path,
                     registry=registry,
+                    question_plan=question_plan,
                     correction_context=correction,
                 )
                 attempts.append(outcome)
@@ -89,8 +110,9 @@ def run_pipeline(
             items.append(
                 PipelineItem(
                     question=question,
+                    question_plan=question_plan,
                     answer=final_answer,
-                    quality_report=quality_agent.assess(final_answer),
+                    quality_report=quality_agent.assess(final_answer, question_plan=question_plan),
                     auto_retry_budget=2,
                     remaining_budget=budget,
                     attempts=attempts,
@@ -144,10 +166,30 @@ def run_pipeline(
             if category == ReviewCategory.QA_INSUFFICIENT:
                 # Re-run QA only — SQL answer unchanged.
                 item.reinvestigated_answer = item.answer
-                item.reinvestigated_quality_report = quality_agent.assess(item.answer)
+                item.reinvestigated_quality_report = quality_agent.assess(
+                    item.answer,
+                    question_plan=item.question_plan,
+                )
             else:
                 # answer_wrong / source_wrong — re-prompt SQL Agent with the
                 # reviewer note as the correction context, then re-run QA.
+                planned = plan_question(
+                    item.question,
+                    registry,
+                    metadata,
+                    reviewer_note=decision.note,
+                )
+                if planned.system_error is not None or planned.plan is None:
+                    item.reinvestigated_answer = _planner_error_answer(
+                        item.question,
+                        planned.system_error,
+                    )
+                    item.reinvestigated_quality_report = quality_agent.assess(
+                        item.reinvestigated_answer
+                    )
+                    _route_to_audit(item, decision, reason="planner_validation_failed")
+                    continue
+                item.question_plan = planned.plan
                 correction = CorrectionContext(
                     prev_sql=item.answer.sql,
                     failure_kind="human_reject",
@@ -162,12 +204,21 @@ def run_pipeline(
                     question=item.question,
                     db_path=db_path,
                     registry=registry,
+                    question_plan=item.question_plan,
                     correction_context=correction,
                     reviewer_note=decision.note,
                 )
                 item.attempts.append(outcome)
                 item.reinvestigated_answer = outcome.answer
-                item.reinvestigated_quality_report = quality_agent.assess(outcome.answer)
+                if outcome.status != "success":
+                    _stamp_failed_reinvestigation(outcome)
+                    item.reinvestigated_quality_report = quality_agent.assess(outcome.answer)
+                    _route_to_audit(item, decision, reason=outcome.status)
+                    continue
+                item.reinvestigated_quality_report = quality_agent.assess(
+                    outcome.answer,
+                    question_plan=item.question_plan,
+                )
             decision.terminal_state = TerminalState.REINVESTIGATED
         return {"items": state["items"]}
 
@@ -235,10 +286,77 @@ def _build_audit_handoff(
     )
 
 
+def _planner_error_answer(
+    question: BusinessQuestion,
+    error: SystemError | None,
+) -> SQLAgentAnswer:
+    err = error or SystemError(
+        error_class="planner_validation_failed",
+        message="Question planner failed without a structured error.",
+        suggested_action="Inspect planner inputs and retry.",
+    )
+    return SQLAgentAnswer(
+        question_id=question.id,
+        question=question.text,
+        metric_name=question.metric,
+        metric_value=None,
+        period=question.period,
+        source=None,
+        sql="",
+        filters=[],
+        assumptions=[],
+        logic="No SQL generated — planner validation failed.",
+        result_rows=[],
+        interpretation_choices=[],
+        dq_notes=[],
+        warnings=[err.message],
+        system_error=err,
+    )
+
+
+def _stamp_failed_reinvestigation(outcome: AttemptOutcome) -> None:
+    if outcome.answer.system_error is not None:
+        return
+    detail = ""
+    if outcome.correction_context is not None:
+        detail = outcome.correction_context.failure_detail
+    error_class = (
+        "answer_shape_validation_failed"
+        if outcome.status == "pre_flight_failure"
+        else outcome.status
+    )
+    if error_class == "llm_soft_failure":
+        error_class = "output"
+    if error_class not in {
+        "output",
+        "exec_failure",
+        "pre_flight_failure",
+        "answer_shape_validation_failed",
+    }:
+        error_class = "llm_error"
+    outcome.answer.system_error = SystemError(
+        error_class=error_class,  # type: ignore[arg-type]
+        message=f"Reinvestigation attempt did not produce an acceptable answer: {detail}",
+        suggested_action=(
+            "Inspect the failed reinvestigation attempt and validated question plan. "
+            "Do not approve this item until the answer satisfies shape/source validation."
+        ),
+        raw=outcome.status,
+    )
+
+
 def write_pipeline_outputs(result: PipelineResult, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     answers = [item.answer.model_dump(mode="json") for item in result.items]
+    plans = [
+        item.question_plan.model_dump(mode="json") if item.question_plan is not None else None
+        for item in result.items
+    ]
     quality = [item.quality_report.model_dump(mode="json") for item in result.items]
+    (output_dir / "question_plans.json").write_text(
+        _json_dump(plans),
+        encoding="utf-8",
+    )
     (output_dir / "sql_agent_answers.json").write_text(
         _json_dump(answers),
         encoding="utf-8",

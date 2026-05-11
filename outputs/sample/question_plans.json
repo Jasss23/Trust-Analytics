@@ -1,0 +1,261 @@
+[
+  {
+    "ambiguity_policy": "single_definition",
+    "answer_shape": "breakdown",
+    "breakdown": {
+      "dimension": "asset_class",
+      "exclude_aggregate_members": []
+    },
+    "comparison_sources": [
+      {
+        "aggregator": "SUM",
+        "column": "gtv_idr",
+        "extra_filters": [
+          "asset_class != 'Total'"
+        ],
+        "period_column": "month",
+        "reason": "Monthly aggregate sourced from fct_trading_daily; should match exactly when summed by asset_class.",
+        "table": "agg_monthly_biz_summary"
+      },
+      {
+        "aggregator": "SUM",
+        "column": "gtv_idr",
+        "extra_filters": [
+          "asset_class != 'Total'"
+        ],
+        "period_column": "month",
+        "reason": "Ops mart filters status != 'failed' (includes pending). Expected to be HIGHER than fct_trading_daily by ~10-15%.",
+        "table": "mart_ops_dashboard"
+      }
+    ],
+    "metric_intent": "gtv_idr_by_asset_class",
+    "period": {
+      "end": "2025-11-01",
+      "start": "2025-10-01"
+    },
+    "primary_source": {
+      "aggregator": "SUM",
+      "column": "gtv_idr",
+      "extra_filters": [],
+      "period_column": "transaction_date",
+      "reason": "Registry canonical primary source.",
+      "table": "fct_trading_daily"
+    },
+    "question_id": "q1_gtv_idr_by_asset_oct_2025",
+    "required_definitions": [],
+    "required_output_columns": [
+      "asset_class",
+      "gtv_idr"
+    ],
+    "source_policy": "canonical",
+    "validation_rules": [
+      "do not include aggregate members in breakdown output",
+      "metric_value must be derived from executed SQL rows"
+    ]
+  },
+  {
+    "ambiguity_policy": "single_definition",
+    "answer_shape": "scalar",
+    "breakdown": null,
+    "comparison_sources": [
+      {
+        "aggregator": "SUM",
+        "column": "gtv_usd",
+        "extra_filters": [
+          "asset_class = 'Total'"
+        ],
+        "period_column": "month",
+        "reason": "Total row for the month; sourced from fct_trading_daily and should match exactly.",
+        "table": "agg_monthly_biz_summary"
+      },
+      {
+        "aggregator": "SUM",
+        "column": "gtv_usd_reported",
+        "extra_filters": [
+          "asset_class = 'Total'"
+        ],
+        "period_column": "month",
+        "reason": "Uses fixed 15,000 IDR/USD conversion AND status != 'failed'. Expected to disagree by 15-25%.",
+        "table": "mart_ops_dashboard"
+      }
+    ],
+    "metric_intent": "total_gtv_usd",
+    "period": {
+      "end": "2025-11-01",
+      "start": "2025-10-01"
+    },
+    "primary_source": {
+      "aggregator": "SUM",
+      "column": "gtv_usd",
+      "extra_filters": [],
+      "period_column": "transaction_date",
+      "reason": "Registry canonical primary source.",
+      "table": "fct_trading_daily"
+    },
+    "question_id": "q2_gtv_usd_oct_2025",
+    "required_definitions": [],
+    "required_output_columns": [
+      "gtv_usd"
+    ],
+    "source_policy": "canonical",
+    "validation_rules": [
+      "metric_value must be derived from executed SQL rows"
+    ]
+  },
+  {
+    "ambiguity_policy": "return_all_definitions",
+    "answer_shape": "multi_definition",
+    "breakdown": null,
+    "comparison_sources": [
+      {
+        "aggregator": "COUNT_DISTINCT",
+        "column": "user_id",
+        "extra_filters": [
+          "status = 'completed'"
+        ],
+        "period_column": "transaction_date",
+        "reason": "Raw distinct completed traders. A different definition of MTU than the business summary.",
+        "table": "raw_transactions"
+      },
+      {
+        "aggregator": "RAW",
+        "column": "mtu_mixpanel",
+        "extra_filters": [
+          "asset_class = 'Total'"
+        ],
+        "period_column": "month",
+        "reason": "Mixpanel client-side MTU. Delivery not guaranteed; lower-bound estimate.",
+        "table": "mart_ops_dashboard"
+      }
+    ],
+    "metric_intent": "monthly_transacting_users",
+    "period": {
+      "end": "2025-11-01",
+      "start": "2025-10-01"
+    },
+    "primary_source": {
+      "aggregator": "RAW",
+      "column": "mtu",
+      "extra_filters": [
+        "asset_class = 'Total'"
+      ],
+      "period_column": "month",
+      "reason": "Registry canonical primary source.",
+      "table": "agg_monthly_biz_summary"
+    },
+    "question_id": "q3_mtu_oct_2025",
+    "required_definitions": [
+      "aum_defined_mtu",
+      "raw_completed_unique_traders",
+      "mixpanel_mtu"
+    ],
+    "required_output_columns": [
+      "aum_defined_mtu",
+      "raw_completed_unique_traders",
+      "mixpanel_mtu"
+    ],
+    "source_policy": "canonical_with_definitional_alternatives",
+    "validation_rules": [
+      "return one value for each required definition",
+      "metric_value must be derived from executed SQL rows"
+    ]
+  },
+  {
+    "ambiguity_policy": "single_definition",
+    "answer_shape": "breakdown",
+    "breakdown": {
+      "dimension": "asset_class",
+      "exclude_aggregate_members": []
+    },
+    "comparison_sources": [
+      {
+        "aggregator": "SUM",
+        "column": "transaction_count",
+        "extra_filters": [
+          "asset_class != 'Total'"
+        ],
+        "period_column": "month",
+        "reason": "Monthly aggregate sourced from fct_trading_daily; should match exactly.",
+        "table": "agg_monthly_biz_summary"
+      },
+      {
+        "aggregator": "SUM",
+        "column": "total_transactions",
+        "extra_filters": [
+          "asset_class != 'Total'"
+        ],
+        "period_column": "month",
+        "reason": "Ops mart filters status != 'failed'. Expected to be HIGHER than fct_trading_daily by ~10-15%.",
+        "table": "mart_ops_dashboard"
+      }
+    ],
+    "metric_intent": "transaction_count_by_asset_class",
+    "period": {
+      "end": "2025-11-01",
+      "start": "2025-10-01"
+    },
+    "primary_source": {
+      "aggregator": "SUM",
+      "column": "transaction_count",
+      "extra_filters": [],
+      "period_column": "transaction_date",
+      "reason": "Registry canonical primary source.",
+      "table": "fct_trading_daily"
+    },
+    "question_id": "q4_transaction_count_by_asset_oct_2025",
+    "required_definitions": [],
+    "required_output_columns": [
+      "asset_class",
+      "transaction_count"
+    ],
+    "source_policy": "canonical",
+    "validation_rules": [
+      "do not include aggregate members in breakdown output",
+      "metric_value must be derived from executed SQL rows"
+    ]
+  },
+  {
+    "ambiguity_policy": "single_definition",
+    "answer_shape": "period_over_period",
+    "breakdown": null,
+    "comparison_sources": [
+      {
+        "aggregator": "SUM",
+        "column": "gtv_idr",
+        "extra_filters": [
+          "asset_class = 'Total'"
+        ],
+        "period_column": "month",
+        "reason": "Monthly Total row sourced from fct_trading_daily. Known issue: December 2025 Total row appears stale/incorrect \u2014 disagrees with fct by ~3.5%.",
+        "table": "agg_monthly_biz_summary"
+      }
+    ],
+    "metric_intent": "gtv_idr_month_on_month_trend",
+    "period": {
+      "end": "2026-01-01",
+      "start": "2025-10-01"
+    },
+    "primary_source": {
+      "aggregator": "SUM",
+      "column": "gtv_idr",
+      "extra_filters": [],
+      "period_column": "transaction_date",
+      "reason": "Registry canonical primary source.",
+      "table": "fct_trading_daily"
+    },
+    "question_id": "q5_gtv_mom_trend_oct_dec_2025",
+    "required_definitions": [],
+    "required_output_columns": [
+      "month",
+      "gtv_idr",
+      "mom_change_idr",
+      "mom_change_pct"
+    ],
+    "source_policy": "canonical",
+    "validation_rules": [
+      "return one row per period bucket",
+      "include absolute and percent period-over-period change",
+      "metric_value must be derived from executed SQL rows"
+    ]
+  }
+]

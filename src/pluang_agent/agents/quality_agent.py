@@ -23,6 +23,7 @@ from pluang_agent.models import (
     LayerBReport,
     LayerCReport,
     QualityReport,
+    QuestionPlan,
     SQLAgentAnswer,
     TrustDimensions,
     TrustProfile,
@@ -41,17 +42,26 @@ class QualityAgent:
         self.metrics_registry = metrics_registry or MetricsRegistry(entries={})
         self.llm_client = llm_client
 
-    def assess(self, answer: SQLAgentAnswer) -> QualityReport:
+    def assess(
+        self,
+        answer: SQLAgentAnswer,
+        question_plan: QuestionPlan | None = None,
+    ) -> QualityReport:
         if answer.system_error is not None:
             return self._system_error_report(answer)
 
         metric_entry = self.metrics_registry.get(answer.question_id)
-        layer_a = run_layer_a(answer, metric_entry=metric_entry)
+        layer_a = run_layer_a(
+            answer,
+            metric_entry=metric_entry,
+            question_plan=question_plan,
+        )
         layer_b = run_layer_b(
             db_path=self.db_path,
             answer=answer,
             registry=self.metrics_registry,
             llm_client=self.llm_client,
+            question_plan=question_plan,
         )
         layer_c = run_layer_c(answer, layer_a, layer_b, llm_client=self.llm_client)
 
@@ -99,4 +109,3 @@ class QualityAgent:
             layer_b=layer_b,
             layer_c=layer_c,
         )
-

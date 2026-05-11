@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from pluang_agent.metrics import MetricEntry, MetricsRegistry
-from pluang_agent.models import BusinessQuestion, SQLAgentAnswer
+from pluang_agent.models import BusinessQuestion, QuestionPlan, SQLAgentAnswer
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,7 @@ def pre_flight_check(
     answer: SQLAgentAnswer,
     question: BusinessQuestion,
     registry: MetricsRegistry,
+    question_plan: QuestionPlan | None = None,
 ) -> PreFlightResult:
     """Return PreFlightResult(passed=True) when the answer is suitable for QA.
 
@@ -61,6 +62,10 @@ def pre_flight_check(
             ),
         )
 
+    shape_check = _check_answer_shape(answer, question_plan)
+    if shape_check is not None:
+        return shape_check
+
     null_check = _check_all_null_primary(answer, entry)
     if null_check is not None:
         return null_check
@@ -75,6 +80,157 @@ def pre_flight_check(
             return range_check
 
     return PreFlightResult(passed=True)
+
+
+def _check_answer_shape(
+    answer: SQLAgentAnswer,
+    plan: QuestionPlan | None,
+) -> PreFlightResult | None:
+    if plan is None:
+        return None
+
+    if answer.source is None:
+        return PreFlightResult(
+            passed=False,
+            issue="source_missing",
+            hint="Return source.primary_table so the answer can be checked against the validated plan.",
+        )
+    if answer.source.primary_table != plan.primary_source.table:
+        return PreFlightResult(
+            passed=False,
+            issue="source_mismatch",
+            hint=(
+                f"The validated plan requires primary source {plan.primary_source.table}, "
+                f"but the answer declared {answer.source.primary_table}. Rewrite using the "
+                "validated plan source or route to audit if the source policy is impossible."
+            ),
+        )
+    if plan.primary_source.table not in answer.sql:
+        return PreFlightResult(
+            passed=False,
+            issue="sql_source_mismatch",
+            hint=f"SQL must query the validated primary source {plan.primary_source.table}.",
+        )
+
+    missing = _missing_required_columns(answer, plan.required_output_columns)
+    if missing:
+        comparison_hint = ""
+        if plan.answer_shape == "breakdown_comparison":
+            comparison_hint = (
+                " For breakdown_comparison, aggregate the primary source and "
+                "comparison source in separate CTEs, join by the breakdown key, "
+                "and output primary value, comparison value, absolute_delta_idr, "
+                "and delta_pct."
+            )
+        return PreFlightResult(
+            passed=False,
+            issue="required_columns_missing",
+            hint=(
+                f"Executed rows are missing required output column(s): {missing}. "
+                "Use the exact aliases from required_output_columns in the validated plan."
+                f"{comparison_hint}"
+            ),
+        )
+
+    if plan.breakdown is not None and plan.breakdown.exclude_aggregate_members:
+        bad_rows: list[str] = []
+        for idx, row in enumerate(answer.result_rows, start=1):
+            value = str(row.get(plan.breakdown.dimension, ""))
+            if value in plan.breakdown.exclude_aggregate_members:
+                bad_rows.append(f"row {idx}.{plan.breakdown.dimension}={value}")
+        if bad_rows:
+            return PreFlightResult(
+                passed=False,
+                issue="aggregate_member_in_breakdown",
+                hint=(
+                    f"The validated plan excludes aggregate breakdown members "
+                    f"{plan.breakdown.exclude_aggregate_members}, but found {bad_rows[:3]}. "
+                    "Add the appropriate filter, such as asset_class != 'Total'."
+                ),
+            )
+
+    if plan.answer_shape == "multi_definition":
+        missing_defs = _missing_required_columns(answer, plan.required_definitions)
+        if missing_defs:
+            return PreFlightResult(
+                passed=False,
+                issue="missing_required_definitions",
+                hint=(
+                    f"Multi-definition answer must return one value per required definition: "
+                    f"{plan.required_definitions}. Missing {missing_defs}."
+                ),
+            )
+        if len(answer.interpretation_choices) == 0:
+            return PreFlightResult(
+                passed=False,
+                issue="missing_interpretation_choices",
+                hint="Multi-definition answer must populate interpretation_choices.",
+            )
+
+    if plan.answer_shape == "period_over_period":
+        pop_check = _check_period_over_period_pct(answer, plan)
+        if pop_check is not None:
+            return pop_check
+
+    if plan.answer_shape == "breakdown_comparison" and not plan.comparison_sources:
+        return PreFlightResult(
+            passed=False,
+            issue="comparison_source_missing",
+            hint="Breakdown comparison plans must include and query a comparison source.",
+        )
+
+    return None
+
+
+def _check_period_over_period_pct(
+    answer: SQLAgentAnswer,
+    plan: QuestionPlan,
+) -> PreFlightResult | None:
+    value_col = plan.primary_source.column
+    if value_col not in plan.required_output_columns:
+        candidates = [
+            col for col in plan.required_output_columns
+            if col not in {"month", "mom_change_idr", "mom_change_pct"}
+        ]
+        value_col = candidates[0] if candidates else value_col
+    for idx, row in enumerate(answer.result_rows[1:], start=2):
+        change = _as_float(row.get("mom_change_idr"))
+        pct = _as_float(row.get("mom_change_pct"))
+        value = _as_float(row.get(value_col))
+        prev_value = _as_float(answer.result_rows[idx - 2].get(value_col))
+        if change is None or pct is None:
+            continue
+        if abs(change) > 1e-9 and abs(pct) < 1e-9:
+            return PreFlightResult(
+                passed=False,
+                issue="period_over_period_pct_zero",
+                hint=(
+                    "mom_change_pct is zero while mom_change_idr is non-zero. "
+                    "SQLite likely performed integer division. Cast numerator or "
+                    "denominator to REAL, or multiply by 100.0 before division."
+                ),
+            )
+        if value is not None and prev_value not in (None, 0):
+            expected = (value - prev_value) / prev_value * 100.0
+            if abs(expected) > 0.01 and abs((pct or 0) - expected) > max(0.05, abs(expected) * 0.1):
+                return PreFlightResult(
+                    passed=False,
+                    issue="period_over_period_pct_incorrect",
+                    hint=(
+                        f"mom_change_pct={pct} does not match computed percent change "
+                        f"~{expected:.4f}. Recompute using REAL arithmetic."
+                    ),
+                )
+    return None
+
+
+def _missing_required_columns(answer: SQLAgentAnswer, required: list[str]) -> list[str]:
+    if not required:
+        return []
+    present: set[str] = set()
+    for row in answer.result_rows:
+        present.update(row.keys())
+    return [col for col in required if col not in present]
 
 
 def _check_all_null_primary(

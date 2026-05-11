@@ -24,6 +24,12 @@ Variables (replaced in Python before sending):
 
 ---
 
+## Validated question plan
+
+{question_plan}
+
+---
+
 ## Business question
 
 {question_text}

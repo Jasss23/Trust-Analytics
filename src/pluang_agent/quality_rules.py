@@ -15,12 +15,13 @@ from __future__ import annotations
 from typing import Any
 
 from pluang_agent.metrics import MetricEntry
-from pluang_agent.models import LayerACheck, LayerAReport, SQLAgentAnswer
+from pluang_agent.models import LayerACheck, LayerAReport, QuestionPlan, SQLAgentAnswer
 
 
 def run_layer_a(
     answer: SQLAgentAnswer,
     metric_entry: MetricEntry | None = None,
+    question_plan: QuestionPlan | None = None,
 ) -> LayerAReport:
     """Run all Layer A rules and return a structured report.
 
@@ -34,6 +35,11 @@ def run_layer_a(
     checks.append(_check_no_required_nulls(answer))
     checks.append(_check_no_negative_for_always_positive(answer))
     checks.append(_check_no_zero_for_must_be_positive(answer))
+    if question_plan is not None:
+        checks.append(_check_required_columns_present(answer, question_plan))
+        checks.append(_check_no_aggregate_member_in_breakdown(answer, question_plan))
+        checks.append(_check_metric_value_matches_result_rows(answer))
+        checks.append(_check_source_matches_plan(answer, question_plan))
     if metric_entry is not None:
         checks.append(_check_plausible_range(answer, metric_entry))
     return LayerAReport(checks=checks)
@@ -141,6 +147,71 @@ def _check_no_zero_for_must_be_positive(answer: SQLAgentAnswer) -> LayerACheck:
             evidence=zero_fields[:10],
         )
     return LayerACheck(name="no_zero_for_must_be_positive", result="PASS")
+
+
+def _check_required_columns_present(
+    answer: SQLAgentAnswer, plan: QuestionPlan
+) -> LayerACheck:
+    present: set[str] = set()
+    for row in answer.result_rows:
+        present.update(row.keys())
+    missing = [col for col in plan.required_output_columns if col not in present]
+    if missing:
+        return LayerACheck(
+            name="required_columns_present",
+            result="FAIL",
+            detail="Executed rows are missing columns required by the validated plan.",
+            evidence=missing,
+        )
+    return LayerACheck(name="required_columns_present", result="PASS")
+
+
+def _check_no_aggregate_member_in_breakdown(
+    answer: SQLAgentAnswer, plan: QuestionPlan
+) -> LayerACheck:
+    if plan.breakdown is None or not plan.breakdown.exclude_aggregate_members:
+        return LayerACheck(name="no_aggregate_member_in_breakdown", result="NOT_APPLICABLE")
+    evidence: list[str] = []
+    for idx, row in enumerate(answer.result_rows, start=1):
+        value = str(row.get(plan.breakdown.dimension, ""))
+        if value in plan.breakdown.exclude_aggregate_members:
+            evidence.append(f"row {idx}.{plan.breakdown.dimension}={value}")
+    if evidence:
+        return LayerACheck(
+            name="no_aggregate_member_in_breakdown",
+            result="FAIL",
+            detail="Breakdown includes an aggregate member excluded by the validated plan.",
+            evidence=evidence[:10],
+        )
+    return LayerACheck(name="no_aggregate_member_in_breakdown", result="PASS")
+
+
+def _check_metric_value_matches_result_rows(answer: SQLAgentAnswer) -> LayerACheck:
+    if answer.metric_value != answer.result_rows:
+        return LayerACheck(
+            name="metric_value_matches_result_rows",
+            result="FAIL",
+            detail="metric_value must be derived from executed SQL rows.",
+            evidence=["metric_value differs from result_rows"],
+        )
+    return LayerACheck(name="metric_value_matches_result_rows", result="PASS")
+
+
+def _check_source_matches_plan(answer: SQLAgentAnswer, plan: QuestionPlan) -> LayerACheck:
+    if answer.source is None:
+        return LayerACheck(
+            name="source_matches_validated_plan",
+            result="FAIL",
+            detail="Answer did not declare source provenance.",
+        )
+    if answer.source.primary_table != plan.primary_source.table:
+        return LayerACheck(
+            name="source_matches_validated_plan",
+            result="FAIL",
+            detail="Answer source does not match the validated question plan.",
+            evidence=[f"{answer.source.primary_table} != {plan.primary_source.table}"],
+        )
+    return LayerACheck(name="source_matches_validated_plan", result="PASS")
 
 
 def _scan(

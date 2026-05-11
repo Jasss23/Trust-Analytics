@@ -61,6 +61,8 @@ class SystemError(BaseModel):
         "exec_failure",
         "pre_flight_failure",
         "auto_retry_exhausted",
+        "planner_validation_failed",
+        "answer_shape_validation_failed",
     ]
     message: str
     suggested_action: str
@@ -72,6 +74,50 @@ class BusinessQuestion(BaseModel):
     text: str
     metric: str
     period: str
+
+
+AnswerShape = Literal[
+    "scalar",
+    "breakdown",
+    "multi_definition",
+    "time_series",
+    "period_over_period",
+    "breakdown_comparison",
+]
+
+
+class PlanPeriod(BaseModel):
+    start: str
+    end: str
+
+
+class PlanSource(BaseModel):
+    table: str
+    column: str
+    period_column: str
+    aggregator: Literal["SUM", "COUNT_DISTINCT", "RAW"] = "SUM"
+    extra_filters: list[str] = Field(default_factory=list)
+    reason: str
+
+
+class PlanBreakdown(BaseModel):
+    dimension: str
+    exclude_aggregate_members: list[str] = Field(default_factory=list)
+
+
+class QuestionPlan(BaseModel):
+    question_id: str
+    metric_intent: str
+    period: PlanPeriod
+    answer_shape: AnswerShape
+    primary_source: PlanSource
+    comparison_sources: list[PlanSource] = Field(default_factory=list)
+    breakdown: PlanBreakdown | None = None
+    required_output_columns: list[str] = Field(default_factory=list)
+    required_definitions: list[str] = Field(default_factory=list)
+    ambiguity_policy: str = "single_definition"
+    source_policy: str = "canonical"
+    validation_rules: list[str] = Field(default_factory=list)
 
 
 class UsageRecord(BaseModel):
@@ -292,6 +338,7 @@ class AuditHandoff(BaseModel):
 
 class PipelineItem(BaseModel):
     question: BusinessQuestion
+    question_plan: QuestionPlan | None = None
     answer: SQLAgentAnswer
     quality_report: QualityReport
     review_decision: ReviewDecision | None = None

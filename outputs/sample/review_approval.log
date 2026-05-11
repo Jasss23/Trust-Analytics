@@ -7,7 +7,7 @@ Retry budget: used 0/2 (remaining 2)
 Attempts: ['success']
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher GTV due to pending transactions included, with a HIGH confidence hypothesis explaining the observed delta of +13.71%.
+QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher GTV due to pending transactions included, with a HIGH confidence hypothesis explaining the observed delta of +13.71%.
 
 Question: q2_gtv_usd_oct_2025
 Decision: approve
@@ -15,7 +15,7 @@ Retry budget: used 0/2 (remaining 2)
 Attempts: ['success']
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A is clean. Layer B indicates cross-source DISAGREEMENT in 3 findings — the mart_ops_dashboard's higher GTV is attributed to pending transactions and a fixed conversion rate, with HIGH confidence in the hypothesis.
+QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 3 findings — the mart_ops_dashboard's higher GTV is attributed to pending transactions and a fixed conversion rate, with a HIGH confidence hypothesis explaining the observed delta.
 
 Question: q3_mtu_oct_2025
 Decision: approve
@@ -23,7 +23,7 @@ Retry budget: used 0/2 (remaining 2)
 Attempts: ['success']
 Terminal state: approved
 Trust profile: YELLOW (correctness=GREEN source=YELLOW ambiguity=YELLOW)
-QA summary: Layer A is clean with all checks passing. Layer B's verdict is NOT APPLICABLE due to definitional differences in MTU, leading to one interpretation choice regarding AUM-derived MTU from agg_monthly_biz_summary.
+QA summary: Layer A is clean with all checks passing. Layer B is marked as NOT APPLICABLE due to definitional differences in MTU, leading to one interpretation choice regarding AUM-defined MTU.
 
 Question: q4_transaction_count_by_asset_oct_2025
 Decision: approve
@@ -31,7 +31,7 @@ Retry budget: used 0/2 (remaining 2)
 Attempts: ['success']
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher transaction counts due to pending transactions included via status != 'failed'; the LLM hypothesis has HIGH confidence and is supported by evidence.
+QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher transaction counts due to pending transactions included via status != 'failed'; the LLM hypothesis has HIGH confidence and is supported by evidence.
 
 Question: q5_gtv_mom_trend_oct_dec_2025
 Decision: approve
@@ -39,4 +39,4 @@ Retry budget: used 0/2 (remaining 2)
 Attempts: ['success']
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 2 findings — December 2025 agg_monthly_biz_summary disagrees with fct_trading_daily by ~3.5%; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting that month's total.
+QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 2 findings — December 2025 values for agg_monthly_biz_summary disagree with fct_trading_daily; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting that month's total.
