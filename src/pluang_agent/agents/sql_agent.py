@@ -36,6 +36,7 @@ from pluang_agent.metrics import MetricEntry, MetricsRegistry, SourceSpec
 from pluang_agent.models import (
     BusinessQuestion,
     CorrectionContext,
+    DerivationTrace,
     QuestionPlan,
     SQLAgentAnswer,
     SystemError,
@@ -70,6 +71,7 @@ class SQLAgent:
         self,
         question: BusinessQuestion,
         question_plan: QuestionPlan | None = None,
+        derivation_trace: DerivationTrace | None = None,
         reviewer_note: str | None = None,
         correction_context: CorrectionContext | None = None,
     ) -> SQLAgentAnswer:
@@ -82,7 +84,9 @@ class SQLAgent:
         vs. immediate escalation.
         """
         try:
-            return self._attempt_once(question, question_plan, reviewer_note, correction_context)
+            return self._attempt_once(
+                question, question_plan, derivation_trace, reviewer_note, correction_context
+            )
         except HARD_ERROR_TYPES as exc:
             return _escalate_hard(question, exc)
         except (LLMOutputError, ValidationError, json.JSONDecodeError, SQLSafetyError) as exc:
@@ -94,11 +98,14 @@ class SQLAgent:
         self,
         question: BusinessQuestion,
         question_plan: QuestionPlan | None,
+        derivation_trace: DerivationTrace | None,
         reviewer_note: str | None,
         correction_context: CorrectionContext | None,
     ) -> SQLAgentAnswer:
         system = _load_system_prompt()
-        user = self._build_user_prompt(question, question_plan, reviewer_note, correction_context)
+        user = self._build_user_prompt(
+            question, question_plan, derivation_trace, reviewer_note, correction_context
+        )
         stage = (
             f"sql_agent:{question.id}"
             if correction_context is None
@@ -121,6 +128,7 @@ class SQLAgent:
         self,
         question: BusinessQuestion,
         question_plan: QuestionPlan | None,
+        derivation_trace: DerivationTrace | None,
         reviewer_note: str | None,
         correction_context: CorrectionContext | None,
     ) -> str:
@@ -139,6 +147,7 @@ class SQLAgent:
             .replace("{schema_context}", schema_ctx)
             .replace("{registry_entry}", registry_entry)
             .replace("{question_plan}", _render_question_plan(question_plan))
+            .replace("{derivation_trace}", _render_derivation_trace(derivation_trace))
             .replace("{question_text}", question.text)
             .replace("{question_id}", question.id)
             .replace("{question_metric}", question.metric)
@@ -152,6 +161,12 @@ def _render_question_plan(plan: QuestionPlan | None) -> str:
     if plan is None:
         return "(no validated question plan — use registry and schema context directly)"
     return plan.model_dump_json(indent=2)
+
+
+def _render_derivation_trace(trace: DerivationTrace | None) -> str:
+    if trace is None:
+        return "(no validated derivation trace — author from registry + schema)"
+    return trace.model_dump_json(indent=2)
 
 
 def _render_correction_block(correction: CorrectionContext | None) -> str:

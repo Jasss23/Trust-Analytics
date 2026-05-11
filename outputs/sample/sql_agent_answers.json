@@ -1,8 +1,74 @@
 [
   {
     "assumptions": [
-      "All transactions in October 2025 are completed and included in fct_trading_daily."
+      "All transactions are completed as the source table already filters for completed transactions."
     ],
+    "derivation_trace": {
+      "aggregator_rationale": "SUM because gtv_idr is per-(transaction_date, asset_class) row, summable across days.",
+      "candidate_sources": [
+        {
+          "grain": {
+            "dimensions": [
+              "transaction_date",
+              "asset_class"
+            ]
+          },
+          "grain_match": "exact",
+          "rejection_reason": null,
+          "scope_feasibility": {
+            "October 2025": "feasible_via=transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'"
+          },
+          "selected": true,
+          "table": "fct_trading_daily"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": "Grain rollup needed; requires aggregation by transaction_date.",
+          "scope_feasibility": {
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01'"
+          },
+          "selected": false,
+          "table": "agg_monthly_biz_summary"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": "Grain rollup needed; requires aggregation by transaction_date.",
+          "scope_feasibility": {
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01'"
+          },
+          "selected": false,
+          "table": "mart_ops_dashboard"
+        }
+      ],
+      "chosen_aggregator": "SUM",
+      "chosen_filters": [
+        "transaction_date >= '2025-10-01'",
+        "transaction_date < '2025-11-01'"
+      ],
+      "chosen_source": "fct_trading_daily",
+      "rendered_why_chosen": "Picked fct_trading_daily because grain (transaction_date, asset_class) matches required (transaction_date, asset_class), and every scope predicate (October 2025) is feasible on it. Rejected: agg_monthly_biz_summary (Grain rollup needed; requires aggregation by transaction_date.); mart_ops_dashboard (Grain rollup needed; requires aggregation by transaction_date.). Filters: transaction_date >= '2025-10-01'; transaction_date < '2025-11-01'. Aggregator: SUM (SUM because gtv_idr is per-(transaction_date, asset_class) row, summable across days.).",
+      "required_grain": {
+        "dimensions": [
+          "transaction_date",
+          "asset_class"
+        ]
+      },
+      "scope_predicates": [
+        "October 2025"
+      ]
+    },
     "dq_notes": [],
     "filters": [
       "transaction_date >= '2025-10-01'",
@@ -64,30 +130,95 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Trace through the Process: I read the registry's primary source as fct_trading_daily, applied the period filter on transaction_date, and complied with the warning that status=completed is already applied in this table. I chose SUM as the aggregator for gtv_idr since it represents the total gross transaction value."
+      "why_chosen": "Picked fct_trading_daily because grain (transaction_date, asset_class) matches required (transaction_date, asset_class), and every scope predicate (October 2025) is feasible on it. Rejected: agg_monthly_biz_summary (Grain rollup needed; requires aggregation by transaction_date.); mart_ops_dashboard (Grain rollup needed; requires aggregation by transaction_date.). Filters: transaction_date >= '2025-10-01'; transaction_date < '2025-11-01'. Aggregator: SUM (SUM because gtv_idr is per-(transaction_date, asset_class) row, summable across days.)."
     },
-    "sql": "SELECT asset_class, SUM(gtv_idr) AS gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class",
+    "sql": "SELECT asset_class, SUM(gtv_idr) AS gtv_idr\nFROM fct_trading_daily\nWHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'\nGROUP BY asset_class",
     "system_error": null,
     "usage": {
-      "completion_tokens": 345,
-      "cost": 0.00055095,
-      "model": "openai/gpt-4o-mini",
-      "prompt_tokens": 4469,
-      "total_tokens": 4814
+      "completion_tokens": 295,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4651,
+      "total_tokens": 4946
     },
     "warnings": []
   },
   {
     "assumptions": [
-      "The data for October 2025 is complete and accurate in the fct_trading_daily table."
+      "All transactions are completed as the status filter is already applied in the fct_trading_daily model."
     ],
+    "derivation_trace": {
+      "aggregator_rationale": "SUM because gtv_usd is per-(day, asset) row, summable across days.",
+      "candidate_sources": [
+        {
+          "grain": {
+            "dimensions": [
+              "transaction_date",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": null,
+          "scope_feasibility": {
+            "October 2025": "feasible_via=transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'"
+          },
+          "selected": true,
+          "table": "fct_trading_daily"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": "Grain is not exact; requires aggregation across asset classes.",
+          "scope_feasibility": {
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total'"
+          },
+          "selected": false,
+          "table": "agg_monthly_biz_summary"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": "Grain is not exact; requires aggregation across asset classes.",
+          "scope_feasibility": {
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total'"
+          },
+          "selected": false,
+          "table": "mart_ops_dashboard"
+        }
+      ],
+      "chosen_aggregator": "SUM",
+      "chosen_filters": [
+        "transaction_date >= '2025-10-01'",
+        "transaction_date < '2025-11-01'"
+      ],
+      "chosen_source": "fct_trading_daily",
+      "rendered_why_chosen": "Picked fct_trading_daily because grain (transaction_date, asset_class) matches required (transaction_date), and every scope predicate (October 2025) is feasible on it. Rejected: agg_monthly_biz_summary (Grain is not exact; requires aggregation across asset classes.); mart_ops_dashboard (Grain is not exact; requires aggregation across asset classes.). Filters: transaction_date >= '2025-10-01'; transaction_date < '2025-11-01'. Aggregator: SUM (SUM because gtv_usd is per-(day, asset) row, summable across days.).",
+      "required_grain": {
+        "dimensions": [
+          "transaction_date"
+        ]
+      },
+      "scope_predicates": [
+        "October 2025"
+      ]
+    },
     "dq_notes": [],
     "filters": [
       "transaction_date >= '2025-10-01'",
       "transaction_date < '2025-11-01'"
     ],
     "interpretation_choices": [],
-    "logic": "The SQL aggregates the total gross transaction value in USD for completed transactions in October 2025.",
+    "logic": "The SQL aggregates the total Gross Transaction Value in USD for completed transactions in October 2025.",
     "metric_name": "total_gtv_usd",
     "metric_value": [
       {
@@ -108,28 +239,96 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Trace through the Process: I read the registry's primary source as fct_trading_daily, applied the period filter on transaction_date, and complied with the \u26a0\ufe0f warning that status=completed is already applied. I chose SUM as the aggregator for gtv_usd since it represents the total gross transaction value."
+      "why_chosen": "Picked fct_trading_daily because grain (transaction_date, asset_class) matches required (transaction_date), and every scope predicate (October 2025) is feasible on it. Rejected: agg_monthly_biz_summary (Grain is not exact; requires aggregation across asset classes.); mart_ops_dashboard (Grain is not exact; requires aggregation across asset classes.). Filters: transaction_date >= '2025-10-01'; transaction_date < '2025-11-01'. Aggregator: SUM (SUM because gtv_usd is per-(day, asset) row, summable across days.)."
     },
     "sql": "SELECT SUM(gtv_usd) AS gtv_usd FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'",
     "system_error": null,
     "usage": {
-      "completion_tokens": 328,
-      "cost": 0.0005319,
-      "model": "openai/gpt-4o-mini",
-      "prompt_tokens": 4410,
-      "total_tokens": 4738
+      "completion_tokens": 279,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4592,
+      "total_tokens": 4871
     },
     "warnings": []
   },
   {
     "assumptions": [
-      "The data for October 2025 is complete and accurate.",
-      "The definitions of MTU from different sources are understood and accepted as valid."
+      "The data for October 2025 is available and accurate.",
+      "The Mixpanel data is accessible and can be queried as expected."
     ],
+    "derivation_trace": {
+      "aggregator_rationale": "RAW because mtu is already aggregated at the monthly level for the Total asset class.",
+      "candidate_sources": [
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": null,
+          "scope_feasibility": {
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01'"
+          },
+          "selected": true,
+          "table": "agg_monthly_biz_summary"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "transaction_date",
+              "user_id"
+            ]
+          },
+          "grain_match": "too_coarse",
+          "rejection_reason": "Grain too coarse; requires daily-level granularity.",
+          "scope_feasibility": {
+            "October 2025": "feasible_via=transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'"
+          },
+          "selected": false,
+          "table": "raw_transactions"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": "Not the canonical source; includes pending transactions.",
+          "scope_feasibility": {
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01'"
+          },
+          "selected": false,
+          "table": "mart_ops_dashboard"
+        }
+      ],
+      "chosen_aggregator": "RAW",
+      "chosen_filters": [
+        "month >= '2025-10-01'",
+        "month < '2025-11-01'",
+        "asset_class = 'Total'"
+      ],
+      "chosen_source": "agg_monthly_biz_summary",
+      "rendered_why_chosen": "Picked agg_monthly_biz_summary because grain (month, asset_class) matches required (month), and every scope predicate (October 2025) is feasible on it. Rejected: raw_transactions (Grain too coarse; requires daily-level granularity.); mart_ops_dashboard (Not the canonical source; includes pending transactions.). Filters: month >= '2025-10-01'; month < '2025-11-01'; asset_class = 'Total'. Aggregator: RAW (RAW because mtu is already aggregated at the monthly level for the Total asset class.).",
+      "required_grain": {
+        "dimensions": [
+          "month"
+        ]
+      },
+      "scope_predicates": [
+        "October 2025"
+      ]
+    },
     "dq_notes": [],
     "filters": [
-      "month >= '2025-10-01' AND month < '2025-11-01'",
-      "asset_class = 'Total'"
+      "month >= '2025-10-01'",
+      "month < '2025-11-01'",
+      "asset_class = 'Total'",
+      "status = 'completed'"
     ],
     "interpretation_choices": [
       {
@@ -138,10 +337,10 @@
           "mixpanel_mtu"
         ],
         "choice": "aum_defined_mtu",
-        "rationale": "Different definitions of MTU are provided for comparison: AUM-derived, raw completed traders, and Mixpanel estimates."
+        "rationale": "Different definitions of MTU are provided for comparison."
       }
     ],
-    "logic": "The SQL aggregates MTU from the canonical source and counts distinct completed transactions from the raw transactions table, while also retrieving Mixpanel MTU for comparison.",
+    "logic": "The SQL aggregates MTU from the primary source and counts distinct completed transactions from the raw transactions table while also retrieving Mixpanel MTU.",
     "metric_name": "monthly_transacting_users",
     "metric_value": [
       {
@@ -166,30 +365,96 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "agg_monthly_biz_summary",
-      "why_chosen": "Trace through the Process: I read the registry's primary source as agg_monthly_biz_summary, applied the period filter for October 2025, and included the extra filter for asset_class = 'Total'. This table is the canonical source for MTU as per the registry."
+      "why_chosen": "Picked agg_monthly_biz_summary because grain (month, asset_class) matches required (month), and every scope predicate (October 2025) is feasible on it. Rejected: raw_transactions (Grain too coarse; requires daily-level granularity.); mart_ops_dashboard (Not the canonical source; includes pending transactions.). Filters: month >= '2025-10-01'; month < '2025-11-01'; asset_class = 'Total'. Aggregator: RAW (RAW because mtu is already aggregated at the monthly level for the Total asset class.)."
     },
     "sql": "SELECT\n    mtu AS aum_defined_mtu,\n    (SELECT COUNT(DISTINCT user_id) FROM raw_transactions WHERE status = 'completed' AND transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01') AS raw_completed_unique_traders,\n    (SELECT mtu_mixpanel FROM mart_ops_dashboard WHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total') AS mixpanel_mtu\nFROM agg_monthly_biz_summary\nWHERE month >= '2025-10-01' AND month < '2025-11-01' AND asset_class = 'Total'",
     "system_error": null,
     "usage": {
-      "completion_tokens": 509,
-      "cost": 0.00065235,
-      "model": "openai/gpt-4o-mini",
-      "prompt_tokens": 4489,
-      "total_tokens": 4998
+      "completion_tokens": 458,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4941,
+      "total_tokens": 5399
     },
     "warnings": []
   },
   {
     "assumptions": [
-      "The data for October 2025 is complete and accurate in the fct_trading_daily table."
+      "The data for October 2025 is complete and accurate."
     ],
+    "derivation_trace": {
+      "aggregator_rationale": "SUM because transaction_count is per-(date, asset) row, summable across days.",
+      "candidate_sources": [
+        {
+          "grain": {
+            "dimensions": [
+              "transaction_date",
+              "asset_class"
+            ]
+          },
+          "grain_match": "exact",
+          "rejection_reason": null,
+          "scope_feasibility": {
+            "October 2025": "feasible_via=transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'"
+          },
+          "selected": true,
+          "table": "fct_trading_daily"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": "Grain rollup needed; requires monthly aggregation.",
+          "scope_feasibility": {
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01'"
+          },
+          "selected": false,
+          "table": "agg_monthly_biz_summary"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": "Grain rollup needed; requires monthly aggregation.",
+          "scope_feasibility": {
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01'"
+          },
+          "selected": false,
+          "table": "mart_ops_dashboard"
+        }
+      ],
+      "chosen_aggregator": "SUM",
+      "chosen_filters": [
+        "transaction_date >= '2025-10-01'",
+        "transaction_date < '2025-11-01'"
+      ],
+      "chosen_source": "fct_trading_daily",
+      "rendered_why_chosen": "Picked fct_trading_daily because grain (transaction_date, asset_class) matches required (transaction_date, asset_class), and every scope predicate (October 2025) is feasible on it. Rejected: agg_monthly_biz_summary (Grain rollup needed; requires monthly aggregation.); mart_ops_dashboard (Grain rollup needed; requires monthly aggregation.). Filters: transaction_date >= '2025-10-01'; transaction_date < '2025-11-01'. Aggregator: SUM (SUM because transaction_count is per-(date, asset) row, summable across days.).",
+      "required_grain": {
+        "dimensions": [
+          "transaction_date",
+          "asset_class"
+        ]
+      },
+      "scope_predicates": [
+        "October 2025"
+      ]
+    },
     "dq_notes": [],
     "filters": [
       "transaction_date >= '2025-10-01'",
       "transaction_date < '2025-11-01'"
     ],
     "interpretation_choices": [],
-    "logic": "The SQL aggregates the total transaction count by asset class for the specified date range using the SUM function.",
+    "logic": "The SQL aggregates the total transaction count by asset class for the specified date range using SUM.",
     "metric_name": "transaction_count_by_asset_class",
     "metric_value": [
       {
@@ -244,31 +509,87 @@
         "mart_ops_dashboard"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Trace through the Process: I read the registry's primary source as fct_trading_daily, applied the period filter on transaction_date, and complied with the warning that status=completed is already applied. I chose SUM as the aggregator for transaction_count since it is a pre-aggregated daily mart column."
+      "why_chosen": "Picked fct_trading_daily because grain (transaction_date, asset_class) matches required (transaction_date, asset_class), and every scope predicate (October 2025) is feasible on it. Rejected: agg_monthly_biz_summary (Grain rollup needed; requires monthly aggregation.); mart_ops_dashboard (Grain rollup needed; requires monthly aggregation.). Filters: transaction_date >= '2025-10-01'; transaction_date < '2025-11-01'. Aggregator: SUM (SUM because transaction_count is per-(date, asset) row, summable across days.)."
     },
-    "sql": "SELECT asset_class, SUM(transaction_count) AS transaction_count FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01' GROUP BY asset_class",
+    "sql": "SELECT asset_class, SUM(transaction_count) AS transaction_count\nFROM fct_trading_daily\nWHERE transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'\nGROUP BY asset_class",
     "system_error": null,
     "usage": {
-      "completion_tokens": 331,
-      "cost": 0.00086175,
-      "model": "openai/gpt-4o-mini",
-      "prompt_tokens": 4421,
-      "total_tokens": 4752
+      "completion_tokens": 277,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4661,
+      "total_tokens": 4938
     },
     "warnings": []
   },
   {
     "assumptions": [
-      "The data for the months in question is complete and accurate.",
-      "The aggregation logic correctly reflects the month-on-month changes."
+      "The data in fct_trading_daily is accurate and reflects completed transactions only.",
+      "The month-on-month change calculations are based on the aggregated GTV values."
     ],
+    "derivation_trace": {
+      "aggregator_rationale": "SUM because gtv_idr is per-(day, asset) row, summable across days.",
+      "candidate_sources": [
+        {
+          "grain": {
+            "dimensions": [
+              "transaction_date",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": null,
+          "scope_feasibility": {
+            "December 2025": "feasible_via=transaction_date >= '2025-12-01' AND transaction_date < '2026-01-01'",
+            "November 2025": "feasible_via=transaction_date >= '2025-11-01' AND transaction_date < '2025-12-01'",
+            "October 2025": "feasible_via=transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'"
+          },
+          "selected": true,
+          "table": "fct_trading_daily"
+        },
+        {
+          "grain": {
+            "dimensions": [
+              "month",
+              "asset_class"
+            ]
+          },
+          "grain_match": "rollup_needed",
+          "rejection_reason": "December 2025 Total row is known stale per the data team backlog",
+          "scope_feasibility": {
+            "December 2025": "infeasible: December 2025 Total row is known stale per the data team backlog",
+            "November 2025": "feasible_via=month >= '2025-11-01' AND month < '2025-12-01'",
+            "October 2025": "feasible_via=month >= '2025-10-01' AND month < '2025-11-01'"
+          },
+          "selected": false,
+          "table": "agg_monthly_biz_summary"
+        }
+      ],
+      "chosen_aggregator": "SUM",
+      "chosen_filters": [
+        "transaction_date >= '2025-10-01'",
+        "transaction_date < '2026-01-01'"
+      ],
+      "chosen_source": "fct_trading_daily",
+      "rendered_why_chosen": "Picked fct_trading_daily because grain (transaction_date, asset_class) matches required (transaction_date), and every scope predicate (October 2025, November 2025, December 2025) is feasible on it. Rejected: agg_monthly_biz_summary (December 2025 Total row is known stale per the data team backlog). Filters: transaction_date >= '2025-10-01'; transaction_date < '2026-01-01'. Aggregator: SUM (SUM because gtv_idr is per-(day, asset) row, summable across days.).",
+      "required_grain": {
+        "dimensions": [
+          "transaction_date"
+        ]
+      },
+      "scope_predicates": [
+        "October 2025",
+        "November 2025",
+        "December 2025"
+      ]
+    },
     "dq_notes": [],
     "filters": [
       "transaction_date >= '2025-10-01'",
       "transaction_date < '2026-01-01'"
     ],
     "interpretation_choices": [],
-    "logic": "The SQL aggregates GTV in IDR for each month and calculates the month-on-month change in both absolute and percentage terms.",
+    "logic": "The SQL aggregates GTV in IDR for each month and calculates month-on-month changes in both absolute and percentage terms.",
     "metric_name": "gtv_idr_month_on_month_trend",
     "metric_value": [
       {
@@ -318,16 +639,16 @@
         "agg_monthly_biz_summary"
       ],
       "primary_table": "fct_trading_daily",
-      "why_chosen": "Trace through the Process: I read the registry's primary source as fct_trading_daily, applied the period filter on transaction_date, complied with the warning to use SUM for gtv_idr, and there are no extra filters to apply."
+      "why_chosen": "Picked fct_trading_daily because grain (transaction_date, asset_class) matches required (transaction_date), and every scope predicate (October 2025, November 2025, December 2025) is feasible on it. Rejected: agg_monthly_biz_summary (December 2025 Total row is known stale per the data team backlog). Filters: transaction_date >= '2025-10-01'; transaction_date < '2026-01-01'. Aggregator: SUM (SUM because gtv_idr is per-(day, asset) row, summable across days.)."
     },
-    "sql": "WITH primary_source AS (SELECT strftime('%Y-%m', transaction_date) AS month, SUM(gtv_idr) AS gtv_idr FROM fct_trading_daily WHERE transaction_date >= '2025-10-01' AND transaction_date < '2026-01-01' GROUP BY month), comparison_source AS (SELECT strftime('%Y-%m', month) AS month, SUM(gtv_idr) AS gtv_idr FROM agg_monthly_biz_summary WHERE month >= '2025-10-01' AND month < '2026-01-01' AND asset_class = 'Total' GROUP BY month) SELECT p.month, p.gtv_idr, (p.gtv_idr - lag(p.gtv_idr) OVER (ORDER BY p.month)) AS mom_change_idr, (100.0 * (p.gtv_idr - lag(p.gtv_idr) OVER (ORDER BY p.month)) / lag(p.gtv_idr) OVER (ORDER BY p.month)) AS mom_change_pct FROM primary_source p",
+    "sql": "SELECT strftime('%Y-%m', transaction_date) AS month, SUM(gtv_idr) AS gtv_idr, \n       SUM(gtv_idr) - LAG(SUM(gtv_idr)) OVER (ORDER BY strftime('%Y-%m', transaction_date)) AS mom_change_idr, \n       100.0 * (SUM(gtv_idr) - LAG(SUM(gtv_idr)) OVER (ORDER BY strftime('%Y-%m', transaction_date))) / NULLIF(LAG(SUM(gtv_idr)) OVER (ORDER BY strftime('%Y-%m', transaction_date)), 0) AS mom_change_pct \nFROM fct_trading_daily \nWHERE transaction_date >= '2025-10-01' AND transaction_date < '2026-01-01' \nGROUP BY strftime('%Y-%m', transaction_date)",
     "system_error": null,
     "usage": {
-      "completion_tokens": 511,
-      "cost": 0.00063675,
-      "model": "openai/gpt-4o-mini",
-      "prompt_tokens": 4377,
-      "total_tokens": 4888
+      "completion_tokens": 449,
+      "cost": null,
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 4559,
+      "total_tokens": 5008
     },
     "warnings": []
   }

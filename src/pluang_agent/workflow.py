@@ -64,7 +64,12 @@ def run_pipeline(
     def answer_questions(state: PipelineState) -> dict[str, Any]:
         items: list[PipelineItem] = []
         for question in state["questions"]:
-            planned = plan_question(question, registry, metadata)
+            planned = plan_question(
+                question,
+                registry,
+                metadata,
+                llm_client=sql_agent.llm_client,
+            )
             if planned.system_error is not None or planned.plan is None:
                 answer = _planner_error_answer(question, planned.system_error)
                 qa_report = quality_agent.assess(answer)
@@ -81,6 +86,7 @@ def run_pipeline(
                 )
                 continue
             question_plan = planned.plan
+            derivation_trace = planned.derivation_trace
             attempts: list[AttemptOutcome] = []
             budget = 2  # R5: unified initial budget for one PipelineItem
             correction: CorrectionContext | None = None
@@ -92,6 +98,7 @@ def run_pipeline(
                     db_path=db_path,
                     registry=registry,
                     question_plan=question_plan,
+                    derivation_trace=derivation_trace,
                     correction_context=correction,
                 )
                 attempts.append(outcome)
@@ -178,6 +185,7 @@ def run_pipeline(
                     registry,
                     metadata,
                     reviewer_note=decision.note,
+                    llm_client=sql_agent.llm_client,
                 )
                 if planned.system_error is not None or planned.plan is None:
                     item.reinvestigated_answer = _planner_error_answer(
@@ -205,6 +213,7 @@ def run_pipeline(
                     db_path=db_path,
                     registry=registry,
                     question_plan=item.question_plan,
+                    derivation_trace=planned.derivation_trace,
                     correction_context=correction,
                     reviewer_note=decision.note,
                 )

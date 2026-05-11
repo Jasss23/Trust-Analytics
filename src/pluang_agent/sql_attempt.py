@@ -23,9 +23,11 @@ from pluang_agent.models import (
     AttemptOutcome,
     BusinessQuestion,
     CorrectionContext,
+    DerivationTrace,
     QuestionPlan,
     SQLAgentAnswer,
 )
+from pluang_agent.planner import apply_trace_to_answer
 from pluang_agent.pre_flight import pre_flight_check
 from pluang_agent.sql_runner import SQLSafetyError, execute_read_only
 
@@ -38,6 +40,7 @@ def run_one_attempt(
     db_path: Path,
     registry: MetricsRegistry,
     question_plan: QuestionPlan | None = None,
+    derivation_trace: DerivationTrace | None = None,
     correction_context: CorrectionContext | None = None,
     reviewer_note: str | None = None,
 ) -> AttemptOutcome:
@@ -48,6 +51,11 @@ def run_one_attempt(
     execution failure, or pre-flight failure. Returns llm_hard_failure
     (no correction_context) on auth/quota/transient — the workflow
     routes these straight to AUDIT_REQUIRED without retrying.
+
+    R6: when `derivation_trace` is provided, the LLM-authored
+    `source` and `source.why_chosen` are overwritten by planner-derived
+    values (apply_trace_to_answer). The trace is also threaded into the
+    pre-flight gate for trace-driven shape checks.
     """
     answer = sql_agent.answer(
         question,
@@ -98,6 +106,11 @@ def run_one_attempt(
 
     answer.result_rows = rows
     answer.metric_value = rows
+
+    # R6: apply the trace post-hoc — overwrites LLM-authored source/why_chosen
+    # with planner-derived values. Idempotent; no-op when trace is None.
+    if derivation_trace is not None:
+        apply_trace_to_answer(answer, derivation_trace)
 
     # Pre-flight gate — before QA sees the answer.
     pre = pre_flight_check(answer, question, registry, question_plan=question_plan)

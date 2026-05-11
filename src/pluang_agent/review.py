@@ -22,6 +22,7 @@ from rich.table import Table
 from rich.text import Text
 
 from pluang_agent.models import (
+    DerivationTrace,
     Hypothesis,
     LayerBReport,
     PipelineItem,
@@ -139,6 +140,15 @@ def _render_review_panel(item: PipelineItem) -> None:
     qa = item.quality_report
     tp = qa.layer_c.trust_profile
 
+    # R6: Key Facts header strip — single dense table for the basics so the
+    # reviewer doesn't have to hunt through prose for "what window / what
+    # source / what filters / what aggregator".
+    _render_key_facts(item)
+
+    # R6: Derivation panel — structured proof of source choice from the trace.
+    if a.derivation_trace is not None:
+        _render_derivation_panel(a.derivation_trace)
+
     # Header — question + trust profile
     header_lines = [
         Text(item.question.text, style="bold"),
@@ -161,7 +171,8 @@ def _render_review_panel(item: PipelineItem) -> None:
         Panel(Group(*header_lines), title=f"[bold]{item.question.id}[/bold]", border_style="blue")
     )
 
-    # Source provenance
+    # Source provenance — kept as a fallback / quick-glance even when the
+    # Derivation panel above covers the same ground in richer form.
     if a.source:
         console.print(
             Panel(
@@ -187,11 +198,12 @@ def _render_review_panel(item: PipelineItem) -> None:
         )
     )
 
-    # Full SQL with syntax highlighting
+    # Full SQL with syntax highlighting — R6 pretty-formats via sqlglot first
     if a.sql:
+        formatted_sql = _pretty_sql(a.sql)
         console.print(
             Panel(
-                Syntax(a.sql, "sql", theme="ansi_dark", word_wrap=True),
+                Syntax(formatted_sql, "sql", theme="ansi_dark", word_wrap=True),
                 title="SQL",
                 border_style="magenta",
             )
@@ -443,6 +455,144 @@ def _render_one_diff(item: PipelineItem) -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# R6: Key Facts header + Derivation panel + pretty SQL
+# ---------------------------------------------------------------------------
+
+
+def _render_key_facts(item: PipelineItem) -> None:
+    """A single dense table at the top of the panel summarising the basics —
+    time window, source, grain, filters, aggregator. Computed from the
+    DerivationTrace when present (planner-derived) and falls back to the
+    QuestionPlan + answer fields otherwise.
+
+    Design intent: reviewer should know "what was queried" within 5 seconds,
+    without reading the SQL or the QA report."""
+
+    table = Table(
+        title=f"Key facts — {item.question.id}",
+        show_header=False,
+        expand=True,
+        title_style="bold",
+    )
+    table.add_column("Field", style="bold cyan", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+
+    plan = item.question_plan
+    trace = item.answer.derivation_trace
+    a = item.answer
+
+    # Time window
+    window = "(unknown)"
+    if plan is not None:
+        window = f"{plan.period.start} → {plan.period.end}"
+    elif a.period:
+        window = a.period
+    table.add_row("Time window", window)
+
+    # Source
+    source = a.source.primary_table if a.source else (
+        trace.chosen_source if trace else (plan.primary_source.table if plan else "(unknown)")
+    )
+    table.add_row("Source", source)
+
+    # Grain
+    grain_str = "(unknown)"
+    if trace is not None and trace.required_grain.dimensions:
+        grain_str = "(" + ", ".join(trace.required_grain.dimensions) + ")"
+    elif plan is not None and plan.breakdown is not None:
+        grain_str = plan.breakdown.dimension
+    table.add_row("Grain", grain_str)
+
+    # Filters
+    filters_str: str
+    if trace is not None and trace.chosen_filters:
+        filters_str = "; ".join(trace.chosen_filters)
+    elif isinstance(a.filters, list) and a.filters:
+        filters_str = "; ".join(str(f) for f in a.filters)
+    elif isinstance(a.filters, dict) and a.filters:
+        filters_str = "; ".join(f"{k}={v}" for k, v in a.filters.items())
+    else:
+        filters_str = "(none declared)"
+    table.add_row("Filters", filters_str)
+
+    # Aggregator
+    agg_str = "(unknown)"
+    if trace is not None:
+        agg_str = f"{trace.chosen_aggregator} — {trace.aggregator_rationale}"
+    elif plan is not None:
+        agg_str = f"{plan.primary_source.aggregator}({plan.primary_source.column})"
+    table.add_row("Aggregator", agg_str)
+
+    # Answer shape (helpful one-word context for what the reviewer should expect)
+    if plan is not None:
+        table.add_row("Answer shape", plan.answer_shape)
+
+    console.print(table)
+
+
+def _render_derivation_panel(trace: DerivationTrace) -> None:
+    """Render the derivation trace as a table of candidate sources with the
+    one selected highlighted and each rejection_reason shown verbatim.
+    Replaces the LLM-narrative why_chosen with structured evidence."""
+
+    table = Table(
+        title="Derivation — candidates considered",
+        expand=True,
+        show_lines=False,
+    )
+    table.add_column("Table", style="bold")
+    table.add_column("Grain", overflow="fold")
+    table.add_column("Match")
+    table.add_column("Scope feasibility", overflow="fold")
+    table.add_column("Selected", justify="center")
+    table.add_column("Rejection reason", overflow="fold")
+
+    for c in trace.candidate_sources:
+        grain = "(" + ", ".join(c.grain.dimensions) + ")"
+        match_style = {
+            "exact": "green",
+            "rollup_needed": "yellow",
+            "too_coarse": "red",
+            "incompatible": "red",
+        }.get(c.grain_match, "")
+        feasibility_lines = []
+        for predicate, value in c.scope_feasibility.items():
+            mark = "✓" if value.startswith("feasible_via") else "✗"
+            feasibility_lines.append(f"{mark} {predicate}: {value}")
+        feasibility_str = "\n".join(feasibility_lines) if feasibility_lines else "(none)"
+        selected_cell = Text("✓ selected", style="bold green") if c.selected else Text("✗", style="dim")
+        rejection = c.rejection_reason or ""
+        table.add_row(
+            c.table,
+            grain,
+            Text(c.grain_match, style=match_style),
+            feasibility_str,
+            selected_cell,
+            rejection,
+        )
+
+    console.print(table)
+    console.print(
+        Panel(
+            Text(trace.rendered_why_chosen, style="italic"),
+            title="why_chosen (planner-derived)",
+            border_style="cyan",
+        )
+    )
+
+
+def _pretty_sql(sql: str) -> str:
+    """Pretty-format SQL via sqlglot. Falls back to the raw string on parse
+    error so we never break the panel just because the model emitted unusual
+    syntax."""
+    try:
+        import sqlglot
+        return sqlglot.transpile(sql, read="sqlite", write="sqlite", pretty=True)[0]
+    except Exception:
+        return sql
 
 
 def _pretty_metric_value(v: object, max_chars: int = 600) -> str:

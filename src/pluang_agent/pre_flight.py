@@ -16,11 +16,17 @@ already pruned the obvious failures.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
 from pluang_agent.metrics import MetricEntry, MetricsRegistry
-from pluang_agent.models import BusinessQuestion, QuestionPlan, SQLAgentAnswer
+from pluang_agent.models import (
+    BusinessQuestion,
+    DerivationTrace,
+    QuestionPlan,
+    SQLAgentAnswer,
+)
 
 
 @dataclass(frozen=True)
@@ -66,6 +72,20 @@ def pre_flight_check(
     if shape_check is not None:
         return shape_check
 
+    # R6: trace-driven checks. All three are data-driven (read what the trace
+    # says, compare to what the answer/SQL did). They fire on any question
+    # whose trace expresses the condition — never on hardcoded question_ids.
+    if answer.derivation_trace is not None:
+        trace_check = _check_trace_complete(answer.derivation_trace)
+        if trace_check is not None:
+            return trace_check
+        filter_check = _check_filters_match_trace(answer, answer.derivation_trace)
+        if filter_check is not None:
+            return filter_check
+        ambiguity_check = _check_ambiguity_surfaced(answer, answer.derivation_trace)
+        if ambiguity_check is not None:
+            return ambiguity_check
+
     null_check = _check_all_null_primary(answer, entry)
     if null_check is not None:
         return null_check
@@ -80,6 +100,151 @@ def pre_flight_check(
             return range_check
 
     return PreFlightResult(passed=True)
+
+
+# ---------------------------------------------------------------------------
+# R6: trace-driven checks (data-driven, not question_id-driven)
+# ---------------------------------------------------------------------------
+
+
+def _check_trace_complete(trace: DerivationTrace) -> PreFlightResult | None:
+    """Structural completeness check on the trace itself.
+
+    Catches a trace that passed the planner's validator but somehow lost a
+    field downstream (defence-in-depth — pre-flight runs the same shape
+    invariants the planner already enforced).
+    """
+    if not trace.candidate_sources:
+        return PreFlightResult(
+            passed=False,
+            issue="trace_no_candidates",
+            hint="Derivation trace has no candidate_sources — planner must enumerate at least one.",
+        )
+    selected = [c for c in trace.candidate_sources if c.selected]
+    if len(selected) != 1:
+        return PreFlightResult(
+            passed=False,
+            issue="trace_selection_invariant",
+            hint=f"Trace must have exactly one selected=True candidate; found {len(selected)}.",
+        )
+    if selected[0].table != trace.chosen_source:
+        return PreFlightResult(
+            passed=False,
+            issue="trace_chosen_source_mismatch",
+            hint=(
+                f"trace.chosen_source ({trace.chosen_source!r}) does not match the "
+                f"selected candidate ({selected[0].table!r})."
+            ),
+        )
+    for c in trace.candidate_sources:
+        if not c.selected and not (c.rejection_reason or "").strip():
+            return PreFlightResult(
+                passed=False,
+                issue="trace_rejection_reason_missing",
+                hint=(
+                    f"Non-selected candidate {c.table!r} has no rejection_reason. "
+                    "Reviewer can't audit the choice without it."
+                ),
+            )
+    if not trace.aggregator_rationale.strip():
+        return PreFlightResult(
+            passed=False,
+            issue="trace_aggregator_rationale_missing",
+            hint="trace.aggregator_rationale is empty.",
+        )
+    return None
+
+
+def _check_filters_match_trace(
+    answer: SQLAgentAnswer, trace: DerivationTrace
+) -> PreFlightResult | None:
+    """Every trace.chosen_filters entry must appear (syntactically) in the SQL.
+
+    Data-driven: the test fires only if the trace declared specific filters.
+    A scalar question with no filters skips this check. A trace that mandates
+    `asset_class != 'Total'` will fail here if the SQL drops it.
+    """
+    sql_norm = _normalise_sql(answer.sql)
+    missing: list[str] = []
+    for f in trace.chosen_filters:
+        if not _filter_present(sql_norm, f):
+            missing.append(f)
+    if missing:
+        return PreFlightResult(
+            passed=False,
+            issue="filters_missing_from_sql",
+            hint=(
+                f"Trace requires filters that aren't in the SQL: {missing}. "
+                "Add them to the WHERE clause exactly as declared in chosen_filters."
+            ),
+        )
+    return None
+
+
+def _check_ambiguity_surfaced(
+    answer: SQLAgentAnswer, trace: DerivationTrace
+) -> PreFlightResult | None:
+    """When the trace shows >= 2 candidates with grain_match=='exact' AND
+    every required scope predicate is feasible on each of them, that's
+    *real* ambiguity — multiple sources could answer the question equally
+    well. The answer MUST populate interpretation_choices.
+
+    Data-driven, not shape-driven: this fires for scalar / breakdown_comparison /
+    multi_definition alike, as long as the trace shows multiple equally-feasible
+    candidates. When only one source is feasible, no interpretation_choices is
+    required (no real ambiguity to surface).
+    """
+    fully_feasible: list[str] = []
+    predicates = trace.scope_predicates or []
+    for c in trace.candidate_sources:
+        if c.grain_match != "exact":
+            continue
+        all_feasible = True
+        for p in predicates:
+            value = c.scope_feasibility.get(p, "")
+            if not value.strip().startswith("feasible_via"):
+                all_feasible = False
+                break
+        if all_feasible:
+            fully_feasible.append(c.table)
+    if len(fully_feasible) >= 2 and len(answer.interpretation_choices) == 0:
+        return PreFlightResult(
+            passed=False,
+            issue="ambiguity_not_surfaced",
+            hint=(
+                f"Trace shows {len(fully_feasible)} equally-feasible sources "
+                f"({fully_feasible}) for this question, but interpretation_choices "
+                f"is empty. Populate interpretation_choices with one entry "
+                f"describing the source choice + alternatives + rationale."
+            ),
+        )
+    return None
+
+
+def _normalise_sql(sql: str) -> str:
+    """Lowercase + squash runs of whitespace for filter substring matching."""
+    return re.sub(r"\s+", " ", sql.lower()).strip()
+
+
+def _filter_present(sql_norm: str, declared_filter: str) -> bool:
+    """Approximate match: declared filter present in normalised SQL.
+
+    We accept either an exact substring match or a relaxed token-match (all
+    identifier+operator+literal tokens in the same order). This avoids
+    false-positives from cosmetic SQL formatting differences.
+    """
+    f_norm = _normalise_sql(declared_filter)
+    if f_norm in sql_norm:
+        return True
+    # Token-level fallback: pull alphanumeric + comparison tokens in order
+    tokens = [t for t in re.findall(r"[a-z0-9_]+|<>|<=|>=|=|<|>|!=", f_norm) if t]
+    cursor = 0
+    for tok in tokens:
+        found = sql_norm.find(tok, cursor)
+        if found < 0:
+            return False
+        cursor = found + len(tok)
+    return True
 
 
 def _check_answer_shape(

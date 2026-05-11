@@ -307,15 +307,55 @@ Observed final verification cost was about `$0.0107` for demo-reject + demo-appr
 
 ## Scaling
 
-What breaks first beyond seven tables:
+Scaling is a routing problem: the architecture that handles the prototype's seven tables does not need to be the same architecture that handles a thousand. Below is the threshold router we'd build, with concrete triggers, what breaks first, and the code changes that come online at each tier.
 
-1. **Full schema context.** Current prompt includes every table. At hundreds of dbt models this needs retrieval over schema/model/metric metadata.
-2. **Manual metric registry.** `metrics.yml` should become an adapter over dbt Semantic Layer / MetricFlow / WrenAI MDL.
-3. **Rule-based planner coverage.** The current planner is reliable for this prototype's metric family, but production needs a retriever-backed planner with the same deterministic QA gate.
-4. **Layer B query volume.** Cross-source reconciliation should eventually be precomputed as scheduled data tests for high-volume metrics.
-5. **Review persistence.** Audit handoffs are emitted, but there is no database-backed audit closure workflow.
+### Tier 1 — current prototype scale (≤ 50 dbt models, ≤ 100 hand-curated metrics, single tenant)
 
-The important architectural choice is that Planner QA, SQL execution, answer-shape validation, and Quality Agent checks are separate. Retrieval or a semantic-layer backend can replace the internals without removing the validation gates.
+Architecture as shipped. Full schema dump into the prompt; hand-curated `metrics.yml`; planner = registry lookup + heuristic fallback + LLM trace proposal + deterministic validator (Hybrid).
+
+| Bottleneck | First failure mode | Code path |
+|---|---|---|
+| Schema context size | Prompt exceeds context window at ~50 tables (~30K tokens of dbt YAML) | `metadata.describe_schema_context` |
+| Metric registry curation | 1–2h human effort per metric | `metrics.yml`, `instructions.yml` |
+| Per-question cost | ~$0.005 with the trace LLM call | `logs/cost.jsonl` |
+
+### Tier 2 — growing dbt project (50–500 models, 100–1000 metrics, still single tenant)
+
+What breaks first: schema context, planner coverage on unregistered metrics. What we'd ship:
+
+1. **Schema retrieval.** Embed dbt YAML descriptions (model + column + warning). Top-K relevant tables get injected into the prompt instead of all of them. The trace validator already cross-checks against full metadata, so retrieval is a prompt-construction optimisation; the gate is untouched. — Touches `metadata.py`, adds `tests/test_schema_retrieval.py`.
+2. **LLM planner candidate generator at scale.** The trace LLM call already proposes a `DerivationTrace`; for unregistered metrics, the same call also drafts the skeleton `QuestionPlan`. Validator stays deterministic. — Touches `planner.py`.
+3. **Generic Layer B fallback.** When a metric is not in `metrics.yml`, layer_b infers candidate alternatives from `describe_schema_context()` instead of falling back to `NOT_APPLICABLE`. Coverage stays correlated with schema, not registry. — Touches `layer_b.py`.
+
+| Bottleneck | First failure mode | Code path |
+|---|---|---|
+| Multi-tenant credentials | Single `OPENROUTER_API_KEY` env var; one SQLite path | `cli.py`, `sql_runner.py` |
+| Cost attribution | `cost_usd` null for non-OpenRouter providers | `llm.py` |
+| Fixture staleness | Prompt drift produces stale fixtures silently | `tests/_fixtures/mock_llm/` |
+
+### Tier 3 — production scale (> 500 models or multi-tenant)
+
+What breaks first: human curation cost, audit-as-terminal, single-tenant assumptions. What we'd ship:
+
+1. **dbt Semantic Layer adapter.** Read MetricFlow MDL directly. `metrics.yml` becomes an export, not a source of truth. Warnings sync from dbt test artifacts and freshness checks. — Replaces `metrics.py` / `instructions.yml`.
+2. **Audit → registry feedback loop.** `AuditHandoff` packages today are a dead-end. At scale, aggregate rejections by category over time, surface a weekly "registry improvements" report (e.g. "every Q5-style rejection pointed at the December stale Total → tighten `expected_max`"). Closes the learning loop the prototype lacks. — New `audit_miner.py` + scheduled job.
+3. **Per-tenant connection pool + cost attribution + dataset access isolation.** SQLAgent gets `tenant_id`; warehouse adapter routes credentials and tracks spend per tenant per question. — Touches `cli.py`, `sql_runner.py`, `llm.py`.
+
+| Bottleneck | First failure mode | Code path |
+|---|---|---|
+| Warehouse coupling | Hard-coded SQLite execute | `sql_runner.execute_read_only` |
+| Audit closure | Manual triage only | `workflow._build_audit_handoff` |
+| Multi-language metric definitions | English-only schema/registry | `metadata.py`, `metrics.yml` |
+
+### Ambitious vision
+
+The three Tier 2/3 improvements compose into one architectural trajectory:
+
+- **The Planner stays the gatekeeper.** Today's hybrid (LLM proposes trace → deterministic validator → render) is the same shape we'd run at 10K models. Validators get more rules; the gate doesn't move.
+- **The metric registry stops being hand-curated.** Tier 3's dbt Semantic Layer adapter feeds the planner from MDL. The five-question demo's `metrics.yml` was illustrative; the real source of truth is upstream.
+- **Audit is a signal, not a bin.** Tier 3's audit-feedback loop turns rejections into registry-tightening suggestions. The prototype's `AuditHandoff.unresolved_questions` is one row of an eventual dataset that the planner is trained against.
+
+The architectural decision that buys us this trajectory is that the **Planner QA Gate, SQL execution, Pre-flight, Quality Agent, and Human Review are independently testable, independently swappable layers**. Retrieval, semantic-layer backends, and audit miners can replace internals without removing or weakening validation gates.
 
 ---
 
@@ -363,4 +403,3 @@ tests/                    unit and integration tests
 - Provided CSV data is not committed.
 - SQLite databases and local runtime files are ignored.
 - `logs/cost.jsonl` is committed as evaluator-visible cost evidence.
-- The Chinese/internal project takeaway is intentionally not committed.

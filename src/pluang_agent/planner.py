@@ -1,21 +1,45 @@
 """Question planner and planner QA gate.
 
-The planner turns natural language into a typed answer contract before SQL is
-generated. It is deliberately rule-based in this prototype: deterministic
-plans are easier to validate, and an LLM planner can be added later as a
-candidate generator that must still pass this same QA gate.
+R6 — two-phase hybrid planner:
+
+  Phase 1 (skeleton, deterministic): registry lookup or text heuristics
+  produce a typed `QuestionPlan` that pins answer_shape, primary_source,
+  required_output_columns. This phase is unchanged from R5 / Codex's
+  planner-validated commit.
+
+  Phase 2 (trace, LLM-proposed + validator-gated): the LLM proposes a
+  `DerivationTrace` from the schema + registry + skeleton plan. The trace
+  defends the source choice: required grain, scope predicates, candidate
+  sources with grain_match + scope_feasibility, chosen source/filters/
+  aggregator. A deterministic validator structurally checks the trace
+  against the dbt metadata (real grains, real columns) and the skeleton
+  plan (chosen source must match the plan's primary unless source_policy
+  permits divergence). Validation failure surfaces as a SystemError; the
+  caller may retry (planner has a small internal budget) or escalate.
+
+  Phase 3 (render, deterministic): compute `why_chosen` text from the
+  validated trace via a template — no free-form LLM authorship survives
+  into the answer.
+
+The point: `why_chosen` is feasible-how, not LLM-narrative. The SQL Agent
+receives the trace, conforms its SQL to it, and never authors `why_chosen`
+again.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
-from pluang_agent.metadata import DbtMetadata
+from pluang_agent.llm import LLMClient, LLMError, LLMOutputError
+from pluang_agent.metadata import DbtMetadata, describe_schema_context
 from pluang_agent.metrics import MetricsRegistry, SourceSpec
 from pluang_agent.models import (
     BusinessQuestion,
+    DerivationTrace,
     PlanBreakdown,
     PlanPeriod,
     PlanSource,
@@ -23,10 +47,18 @@ from pluang_agent.models import (
     SystemError,
 )
 
+_PROMPTS_DIR = Path(__file__).parents[2] / "prompts"
+_TRACE_BUDGET = 1  # one retry on validation failure (planner's own budget)
+
+
+def _load_trace_prompt() -> str:
+    return (_PROMPTS_DIR / "planner_trace.md").read_text(encoding="utf-8")
+
 
 @dataclass(frozen=True)
 class PlannerResult:
     plan: QuestionPlan | None
+    derivation_trace: DerivationTrace | None = None
     system_error: SystemError | None = None
 
 
@@ -51,7 +83,15 @@ def plan_question(
     registry: MetricsRegistry,
     metadata: DbtMetadata,
     reviewer_note: str | None = None,
+    llm_client: LLMClient | None = None,
 ) -> PlannerResult:
+    """Phase 1+2+3: skeleton plan → LLM trace → validator → rendered why_chosen.
+
+    `llm_client` is optional. When None, only the skeleton plan is produced
+    (legacy R5 behaviour; the SQL Agent falls back to authoring `why_chosen`).
+    When set, the planner additionally proposes and validates a
+    `DerivationTrace` and a deterministically rendered `why_chosen`.
+    """
     entry = registry.get(question.id)
     if entry is not None:
         plan = _plan_from_registry(question, entry, reviewer_note)
@@ -72,7 +112,376 @@ def plan_question(
                 raw=plan.model_dump_json(),
             ),
         )
-    return PlannerResult(plan=plan)
+
+    if llm_client is None:
+        # Legacy path: skeleton only. SQL Agent will author why_chosen.
+        return PlannerResult(plan=plan)
+
+    # Phase 2 + 3: trace + render
+    trace_result = _propose_and_validate_trace(
+        question=question,
+        plan=plan,
+        registry=registry,
+        metadata=metadata,
+        llm_client=llm_client,
+    )
+    if trace_result.system_error is not None:
+        return PlannerResult(plan=plan, system_error=trace_result.system_error)
+    return PlannerResult(plan=plan, derivation_trace=trace_result.trace)
+
+
+@dataclass(frozen=True)
+class _TraceResult:
+    trace: DerivationTrace | None
+    system_error: SystemError | None = None
+
+
+def _propose_and_validate_trace(
+    question: BusinessQuestion,
+    plan: QuestionPlan,
+    registry: MetricsRegistry,
+    metadata: DbtMetadata,
+    llm_client: LLMClient,
+) -> _TraceResult:
+    """Run up to 1 + _TRACE_BUDGET LLM calls to produce a valid trace.
+
+    The planner has its own small retry budget here so that a single hallu-
+    cinated grain doesn't fail the whole question — but we don't let it
+    spiral. Exhaustion returns a SystemError; the workflow then routes the
+    question to AUDIT_REQUIRED.
+    """
+    system_prompt = _load_trace_prompt()
+    correction: str | None = None
+    last_error_detail: str = ""
+    for attempt in range(_TRACE_BUDGET + 1):
+        user_prompt = _render_trace_user_prompt(question, plan, registry, metadata, correction)
+        stage = (
+            f"planner_trace:{question.id}"
+            if attempt == 0
+            else f"planner_trace_retry:{question.id}"
+        )
+        try:
+            response = llm_client.chat_json(system_prompt, user_prompt, stage_tag=stage)
+        except LLMError as exc:
+            return _TraceResult(
+                trace=None,
+                system_error=SystemError(
+                    error_class=getattr(exc, "error_class", "llm_error"),  # type: ignore[arg-type]
+                    message=f"Planner trace call failed: {exc}",
+                    suggested_action=(
+                        "Investigate the LLM call before retrying. If quota / "
+                        "auth, fix the credentials. If transient, re-run."
+                    ),
+                    raw=type(exc).__name__,
+                ),
+            )
+
+        try:
+            payload = _loads_json_object(response.content)
+            trace = DerivationTrace.model_validate(payload)
+        except (json.JSONDecodeError, ValueError, LLMOutputError) as exc:
+            last_error_detail = f"trace_parse_error: {exc!s}"
+            correction = (
+                f"Your previous output failed to parse as a DerivationTrace: "
+                f"{last_error_detail}. Return a valid JSON object exactly "
+                f"matching the contract."
+            )
+            continue
+
+        issues = validate_derivation_trace(trace, plan, metadata)
+        if not issues:
+            return _TraceResult(trace=trace)
+        last_error_detail = "; ".join(issues[:6])
+        correction = (
+            f"Your previous trace failed validation: {last_error_detail}. "
+            "Address each issue exactly. Do NOT re-emit the same trace."
+        )
+
+    return _TraceResult(
+        trace=None,
+        system_error=SystemError(
+            error_class="trace_validation_failed",
+            message=f"Trace validator rejected proposals after {_TRACE_BUDGET + 1} "
+            f"attempt(s). Last failure: {last_error_detail}",
+            suggested_action=(
+                "Inspect the planner_trace prompt and the candidate the LLM "
+                "produced. The trace validator caught structural violations "
+                "(grain mismatch / missing rejection_reason / chosen source "
+                "not in candidates / scope predicate uncovered)."
+            ),
+            raw=last_error_detail[:500],
+        ),
+    )
+
+
+def _render_trace_user_prompt(
+    question: BusinessQuestion,
+    plan: QuestionPlan,
+    registry: MetricsRegistry,
+    metadata: DbtMetadata,
+    correction: str | None,
+) -> str:
+    schema_ctx = describe_schema_context(metadata)
+    entry = registry.get(question.id)
+    registry_block = (
+        _render_registry_for_trace(entry)
+        if entry is not None
+        else "(no registry entry — derive candidates from schema context only)"
+    )
+    plan_block = plan.model_dump_json(indent=2)
+    correction_block = ""
+    if correction:
+        correction_block = (
+            "\n\n## Correction\nYour previous attempt failed. Address "
+            f"specifically:\n{correction}\n"
+        )
+    return (
+        "## Schema context\n"
+        f"{schema_ctx}\n\n"
+        "## Metric registry entry\n"
+        f"{registry_block}\n\n"
+        "## Skeleton plan (from deterministic phase 1)\n"
+        f"```json\n{plan_block}\n```\n\n"
+        "## Business question\n"
+        f"{question.text}\n\n"
+        f"Question id: {question.id}\n"
+        f"Metric: {question.metric}\n"
+        f"Period: {question.period}\n"
+        f"{correction_block}\n"
+        "Return the DerivationTrace JSON now."
+    )
+
+
+def _render_registry_for_trace(entry) -> str:
+    """Lightweight registry rendering for the trace prompt — same shape as the
+    SQL Agent prompt's registry block but standalone to avoid coupling."""
+
+    def fmt_source(label: str, src: SourceSpec) -> list[str]:
+        return [
+            f"  {label}: table={src.table} column={src.column} "
+            f"period_column={src.period_column} aggregator={src.aggregator} "
+            f"extra_filters={list(src.extra_filters)}",
+        ]
+
+    lines = [
+        f"id: {entry.id}",
+        f"metric_name: {entry.metric_name}",
+        f"cross_source: {entry.cross_source}",
+        f"period: {entry.period_start} → {entry.period_end}",
+        "sources:",
+    ]
+    lines.extend(fmt_source("primary", entry.primary))
+    for i, alt in enumerate(entry.alternatives):
+        lines.extend(fmt_source(f"alt_{i}", alt))
+    if entry.notes_for_layer_b:
+        lines.append(f"notes_for_layer_b: {entry.notes_for_layer_b}")
+    return "\n".join(lines)
+
+
+def _loads_json_object(text: str) -> dict:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text.strip())
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+        if not match:
+            raise LLMOutputError(
+                f"No JSON object found in trace LLM output: {text[:300]}"
+            ) from None
+        return json.loads(match.group(0))
+
+
+# ---------------------------------------------------------------------------
+# Trace validator + renderer (deterministic) — R6
+# ---------------------------------------------------------------------------
+
+
+def validate_derivation_trace(
+    trace: DerivationTrace,
+    plan: QuestionPlan,
+    metadata: DbtMetadata,
+) -> list[str]:
+    """Structural checks on a proposed DerivationTrace.
+
+    Pure structural verification — no semantic interpretation. Catches:
+    - chosen_source must be a candidate marked selected=True
+    - exactly one candidate selected
+    - non-selected candidates must have a non-empty rejection_reason
+    - chosen candidate's scope_feasibility must cover every scope_predicate
+      with a `feasible_via=...` value
+    - candidate tables and chosen_source must exist in dbt metadata
+    - chosen_filters must reference columns that exist on chosen_source
+    - aggregator_rationale must reference column grain (mention "grain",
+      "per", "row", "daily", "monthly", etc.) — keyword check, not vibes
+    - rendered_why_chosen non-empty, references chosen_source
+    - chosen_source must match plan.primary_source.table when
+      source_policy='canonical'
+
+    Plan-driven, not question-id-driven. The list of issues is returned;
+    empty list means valid.
+    """
+    issues: list[str] = []
+    table_columns = _table_columns(metadata)
+
+    # Selection sanity
+    selected_count = sum(1 for c in trace.candidate_sources if c.selected)
+    if selected_count == 0:
+        issues.append("no candidate has selected=true")
+    if selected_count > 1:
+        issues.append(f"more than one candidate selected ({selected_count})")
+    if trace.chosen_source not in {c.table for c in trace.candidate_sources}:
+        issues.append(
+            f"chosen_source ({trace.chosen_source!r}) is not among "
+            f"candidate_sources tables"
+        )
+    selected_candidates = [c for c in trace.candidate_sources if c.selected]
+    if selected_candidates and selected_candidates[0].table != trace.chosen_source:
+        issues.append(
+            f"the selected=true candidate ({selected_candidates[0].table!r}) "
+            f"differs from chosen_source ({trace.chosen_source!r})"
+        )
+
+    # Non-selected must have rejection_reason
+    for c in trace.candidate_sources:
+        if not c.selected and not (c.rejection_reason or "").strip():
+            issues.append(
+                f"non-selected candidate {c.table!r} missing rejection_reason"
+            )
+
+    # Candidate tables exist in dbt metadata
+    for c in trace.candidate_sources:
+        if c.table not in table_columns:
+            issues.append(
+                f"candidate table {c.table!r} not found in dbt metadata"
+            )
+
+    # Chosen candidate's scope_feasibility covers all scope_predicates feasibly
+    if selected_candidates:
+        chosen = selected_candidates[0]
+        for predicate in trace.scope_predicates:
+            value = chosen.scope_feasibility.get(predicate)
+            if value is None:
+                issues.append(
+                    f"chosen candidate missing scope_feasibility entry for "
+                    f"predicate {predicate!r}"
+                )
+            elif not value.strip().startswith("feasible_via"):
+                issues.append(
+                    f"chosen candidate scope predicate {predicate!r} is not "
+                    f"feasible: {value}"
+                )
+
+    # Every scope_predicate must appear in at least one candidate's dict
+    if trace.scope_predicates:
+        coverage_union: set[str] = set()
+        for c in trace.candidate_sources:
+            coverage_union.update(c.scope_feasibility.keys())
+        for p in trace.scope_predicates:
+            if p not in coverage_union:
+                issues.append(
+                    f"scope predicate {p!r} not covered by any candidate's "
+                    f"scope_feasibility dict"
+                )
+
+    # Filters reference real columns on chosen_source
+    chosen_cols = table_columns.get(trace.chosen_source, set())
+    for f in trace.chosen_filters:
+        # Heuristic: extract leading identifier of each filter clause.
+        m = re.match(r"\s*([a-zA-Z_][a-zA-Z0-9_]*)", f)
+        if m is None:
+            issues.append(f"chosen_filter {f!r} has no leading identifier")
+            continue
+        col = m.group(1)
+        if col not in chosen_cols and chosen_cols:
+            issues.append(
+                f"chosen_filter references column {col!r} not present on "
+                f"{trace.chosen_source!r}"
+            )
+
+    # Aggregator rationale references grain (keyword family — not "vibes")
+    rationale = trace.aggregator_rationale.lower()
+    grain_tokens = ("grain", "per ", "per-", "row", "daily", "monthly", "snapshot")
+    if not any(tok in rationale for tok in grain_tokens):
+        issues.append(
+            "aggregator_rationale does not reference column grain "
+            "(must mention grain/per/row/daily/monthly/snapshot)"
+        )
+
+    # rendered_why_chosen non-empty + references chosen_source
+    if not trace.rendered_why_chosen.strip():
+        issues.append("rendered_why_chosen is empty")
+    elif trace.chosen_source not in trace.rendered_why_chosen:
+        issues.append(
+            f"rendered_why_chosen does not mention chosen_source "
+            f"({trace.chosen_source!r})"
+        )
+
+    # Plan source_policy='canonical' → chosen_source must match plan primary
+    if plan.source_policy == "canonical":
+        if trace.chosen_source != plan.primary_source.table:
+            issues.append(
+                f"source_policy=canonical requires chosen_source == "
+                f"plan.primary_source.table ({plan.primary_source.table!r}); "
+                f"got {trace.chosen_source!r}"
+            )
+
+    return issues
+
+
+def render_why_chosen(trace: DerivationTrace) -> str:
+    """Deterministic renderer — produces a substantive process-trace sentence
+    from the validated trace. Used when the trace is the source of truth and
+    we want `source.why_chosen` to be machine-derived, not LLM-narrative.
+
+    Note: the LLM also produces `trace.rendered_why_chosen` (the model's own
+    rendering). We prefer the validator-derived rendering here so the
+    contract is stable regardless of model behaviour."""
+    grain_str = "(" + ", ".join(trace.required_grain.dimensions) + ")"
+    chosen = next(
+        (c for c in trace.candidate_sources if c.selected and c.table == trace.chosen_source),
+        None,
+    )
+    chosen_grain = (
+        "(" + ", ".join(chosen.grain.dimensions) + ")" if chosen else "?"
+    )
+    rejected = [
+        f"{c.table} ({c.rejection_reason or 'no reason given'})"
+        for c in trace.candidate_sources
+        if not c.selected
+    ]
+    rejected_str = "; ".join(rejected) if rejected else "no alternatives considered"
+    filters_str = "; ".join(trace.chosen_filters) if trace.chosen_filters else "(no filters)"
+    return (
+        f"Picked {trace.chosen_source} because grain {chosen_grain} matches "
+        f"required {grain_str}, and every scope predicate "
+        f"({', '.join(trace.scope_predicates) or 'none'}) is feasible on it. "
+        f"Rejected: {rejected_str}. Filters: {filters_str}. "
+        f"Aggregator: {trace.chosen_aggregator} ({trace.aggregator_rationale})."
+    )
+
+
+def apply_trace_to_answer(answer, trace: DerivationTrace) -> None:
+    """Overwrite the LLM-authored `source` + `why_chosen` with the planner-
+    derived values from the trace. Idempotent. Mutates in place.
+
+    `answer.source.alternatives_available` keeps the trace's full candidate
+    list (minus chosen) so reviewers see what was considered.
+    """
+    from pluang_agent.models import SourceProvenance  # local import to avoid cycle
+
+    alternatives = [
+        c.table for c in trace.candidate_sources if c.table != trace.chosen_source
+    ]
+    rendered = render_why_chosen(trace)
+    answer.source = SourceProvenance(
+        primary_table=trace.chosen_source,
+        why_chosen=rendered,
+        alternatives_available=alternatives,
+    )
+    answer.derivation_trace = trace.model_copy(update={"rendered_why_chosen": rendered})
 
 
 def validate_question_plan(

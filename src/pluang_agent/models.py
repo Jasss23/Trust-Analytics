@@ -63,6 +63,7 @@ class SystemError(BaseModel):
         "auto_retry_exhausted",
         "planner_validation_failed",
         "answer_shape_validation_failed",
+        "trace_validation_failed",
     ]
     message: str
     suggested_action: str
@@ -120,6 +121,65 @@ class QuestionPlan(BaseModel):
     validation_rules: list[str] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# Derivation trace — R6
+# ---------------------------------------------------------------------------
+#
+# A DerivationTrace is the structural proof that justifies `source`/`filters`/
+# `aggregator` choices. Instead of letting the LLM author a free-form
+# `why_chosen` sentence, the planner produces this trace (hybrid: LLM
+# proposes; planner validates deterministically). `why_chosen` on the
+# resulting SQLAgentAnswer is then *rendered* from this trace by code, not
+# authored by the model — so boilerplate becomes structurally impossible.
+
+
+GrainMatch = Literal["exact", "rollup_needed", "too_coarse", "incompatible"]
+
+
+class GrainSpec(BaseModel):
+    """A list of column names that define a table's grain (one row per
+    combination). Empty list = single-row table."""
+
+    dimensions: list[str] = Field(default_factory=list)
+
+
+class CandidateSource(BaseModel):
+    """One candidate table the planner considered for answering the question.
+
+    `grain_match` says how the candidate's grain compares to the required
+    grain. `scope_feasibility` records, for each scope predicate in the
+    trace, whether the candidate can satisfy that predicate (and how:
+    `feasible_via=...` or `infeasible: <why>`). Exactly one candidate has
+    `selected=True`; non-selected candidates require a `rejection_reason`.
+    """
+
+    table: str
+    grain: GrainSpec
+    grain_match: GrainMatch
+    scope_feasibility: dict[str, str] = Field(default_factory=dict)
+    selected: bool = False
+    rejection_reason: str | None = None
+
+
+class DerivationTrace(BaseModel):
+    """Structured derivation of the source/filters/aggregator choice.
+
+    The planner emits this; the SQL Agent does not author any field on it.
+    Pre-flight checks against this artifact (data-driven, not question-id
+    driven). The HITL panel renders it as a table so reviewers can see
+    exactly which candidates were considered and why the chosen one won.
+    """
+
+    required_grain: GrainSpec
+    scope_predicates: list[str] = Field(default_factory=list)
+    candidate_sources: list[CandidateSource] = Field(default_factory=list)
+    chosen_source: str
+    chosen_filters: list[str] = Field(default_factory=list)
+    chosen_aggregator: str
+    aggregator_rationale: str
+    rendered_why_chosen: str
+
+
 class UsageRecord(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -174,6 +234,10 @@ class SQLAgentAnswer(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     usage: UsageRecord | None = None
     system_error: SystemError | None = None
+    # R6: structured derivation. When present, `source` and the
+    # `source.why_chosen` field on this answer are *derived* from this
+    # trace by the planner — the LLM is no longer authoritative on either.
+    derivation_trace: DerivationTrace | None = None
 
 
 # ---------------------------------------------------------------------------

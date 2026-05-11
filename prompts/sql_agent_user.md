@@ -3,6 +3,8 @@
 Variables (replaced in Python before sending):
 - {schema_context}     — WrenAI-style full schema description from describe_schema_context()
 - {registry_entry}     — Metric registry entry (yaml-style block) for this question
+- {question_plan}      — Validated QuestionPlan JSON (skeleton phase output)
+- {derivation_trace}   — Validated DerivationTrace JSON (R6) — empty if no trace
 - {question_text}      — Plain-English business question
 - {question_id}        — Stable question identifier (e.g. q1_gtv_idr_by_asset_oct_2025)
 - {question_metric}    — Concise metric name
@@ -27,6 +29,12 @@ Variables (replaced in Python before sending):
 ## Validated question plan
 
 {question_plan}
+
+---
+
+## Validated derivation trace
+
+{derivation_trace}
 
 ---
 
