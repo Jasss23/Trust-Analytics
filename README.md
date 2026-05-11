@@ -10,9 +10,10 @@ The system answers business questions over the provided SQLite-loaded CSV data, 
 
 ```text
 question
-  -> Question Planner
-  -> Planner QA Gate
-  -> SQL Agent
+  -> Question Planner (skeleton)
+  -> Planner QA Gate (deterministic validator)
+  -> Derivation Trace (LLM proposes; deterministic validator gates)
+  -> SQL Agent (writes SQL conforming to plan + trace)
   -> read-only SQL execution
   -> semantic pre-flight / answer-shape validation
   -> Quality Agent
@@ -21,21 +22,29 @@ question
        Layer C: reviewer-facing trust profile
   -> Human Review
        approve | reject(category + note) | audit_required
+          \-> on answer_wrong/source_wrong: LLM-revise plan,
+              re-derive trace, re-run SQL Agent (R8)
 ```
 
 ### Components
 
 | Component | Role |
 |---|---|
-| `planner.py` | Builds a typed `QuestionPlan`: metric intent, period, source policy, answer shape, required columns, ambiguity policy, and validation rules. |
-| Planner QA | Validates the plan before SQL generation: table/column grounding, period bounds, breakdown intent, MoM intent, multi-definition intent, Total-row exclusion, and noncanonical source policy. |
-| SQL Agent | LLM-driven SQL proposal from the validated plan + schema context + metric registry. It does not provide numeric truth. |
+| `planner.plan_question` | Builds a typed `QuestionPlan` (skeleton): metric intent, period, source policy, answer shape, required columns, ambiguity policy, validation rules. |
+| `planner.replan_question` | R8 — LLM-revises an existing plan with reviewer feedback on reinvestigation; validator gates the revision. Generic over any plan-changing reject note (wrong metric, wrong aggregator, wrong source, wrong shape). |
+| Planner QA | Deterministic validator: table/column grounding, period bounds, breakdown intent, MoM intent, multi-definition intent, Total-row exclusion, source policy. Runs on initial AND revised plans identically. |
+| Derivation Trace | LLM proposes a structured `DerivationTrace` (required grain, scope predicates, candidate sources with grain_match + scope_feasibility, chosen source/filters/aggregator). Deterministic validator checks structural invariants. The reviewer-facing `why_chosen` is code-rendered from this trace, not LLM-narrative. |
+| SQL Agent | LLM-driven SQL proposal from the validated plan + trace + schema context + metric registry. Single LLM call per invocation; retry policy lives in the state machine, not the agent. Does not author `why_chosen` (planner-owned). |
 | SQL runner | Executes only read-only single-statement `SELECT` / `WITH` SQL. Rejects DDL, DML, PRAGMA, and multi-statement SQL. |
-| Semantic pre-flight | Checks executed rows against the plan: required columns, source match, no aggregate members in breakdowns, multi-definition completeness, MoM percent sanity, and answer shape. |
+| Semantic pre-flight | Checks executed rows against the plan AND trace: required columns, source match, no aggregate members in breakdowns, multi-definition completeness, MoM percent sanity, filter coverage, ambiguity surfacing on multi-feasible-candidate traces. |
 | Quality Agent | Runs Layer A/B/C and produces a `QualityReport` for every answer. |
-| Human Review | Rich terminal review panel. Rejections require category + note; category drives routing, note provides context. |
+| Human Review | Rich terminal review panel with Key Facts header + Derivation panel + pretty SQL. Rejections require category + note; on `answer_wrong`/`source_wrong` the planner LLM-revises the plan before the SQL Agent retries. |
 
 The Planner is deliberately not trusted. Its output must pass deterministic validation before the SQL Agent is called. This was added after review found that prompt-only instructions could still produce incomplete answers, e.g. MTU ambiguity text without all MTU values, or a MoM trend without MoM change fields.
+
+The Derivation Trace was added because the SQL Agent's free-form `why_chosen` field tended to be LLM-narrative boilerplate even when the schema technically passed validation. Making the planner own `why_chosen` via a structured trace + code-rendered string means boilerplate is structurally impossible — the reviewer sees an auditable derivation (candidates considered, grain match per candidate, scope feasibility per predicate, chosen source with rendered process trace) rather than a confident sentence.
+
+R8's plan revision on reinvestigation closes the reviewer-feedback loop: when the reviewer correctly identifies a metric / aggregator / source / shape error, the LLM proposes a revised plan and the deterministic validator gates it. Before R8, the reviewer note flowed into the SQL Agent's correction context but not into the planner — so the SQL Agent would generate a correct new answer that pre-flight then rejected for plan-vs-answer mismatch.
 
 ### Agent Separation
 
@@ -103,10 +112,12 @@ Examples:
 
 Prompts live in `prompts/`:
 
-- `sql_agent_system.md`
-- `sql_agent_user.md`
-- `qa_layer_b_hypothesis.md`
-- `qa_layer_c_compose.md`
+- `sql_agent_system.md` — SQL Agent role + process + output contract. `why_chosen` is explicitly planner-owned (do not author it).
+- `sql_agent_user.md` — per-question template with slots for schema context, registry entry, validated plan, derivation trace, reviewer note, correction block.
+- `planner_trace.md` — LLM proposes a structured `DerivationTrace` from schema + registry + skeleton plan. Validator gates structurally.
+- `planner_revise.md` (R8) — LLM revises an existing plan on `answer_wrong` / `source_wrong` rejection. Hard rules: only change fields the reviewer note implies, preserve `question_id`, real tables/columns only.
+- `qa_layer_b_hypothesis.md` — bounded grounded hypothesis on cross-source disagreement.
+- `qa_layer_c_compose.md` — trust profile composition from structured Layer A + B output.
 
 The prompts explain process and output contracts. The hard guarantees come from typed validation and executed SQL, not from trusting prompt compliance.
 
@@ -174,7 +185,7 @@ pluang-agent run --review-mode demo-approve
 pluang-agent run --review-mode demo-reject
 ```
 
-### Ask Your Own Question (R7)
+### Ask Your Own Question
 
 The `ask` command takes any natural-language question and runs it through the same pipeline as the five demo questions — hybrid planner (LLM-proposed `DerivationTrace` + deterministic validator) → SQL Agent → execute → pre-flight → QA → human review.
 
@@ -192,6 +203,8 @@ pluang-agent ask "Year-end snapshot" --metric gtv_idr --period "December 2025"
 Outputs are written to `outputs/ask/<synthesised_id>/` (a fresh subdirectory per invocation so the five-question demo samples stay clean). Each ad-hoc run produces the same four files as `run`: `sql_agent_answers.json`, `quality_report.json`, `question_plans.json`, and a `review_*.log`.
 
 When the planner can't construct a defensible derivation trace (unregistered metric the LLM can't ground in the schema, ambiguous question with no canonical source, etc.), the question routes to `audit_required` with a structured `AuditHandoff`. The CLI prints the failure reason and exits non-zero — *no question crashes the pipeline*, but not every question gets answered.
+
+When the reviewer rejects an ad-hoc answer with `answer_wrong` or `source_wrong`, the planner LLM-revises the plan with the reviewer note (R8) before the SQL Agent retries. So a note like *"I want row count, not sum of value"* on a heuristically-misinferred question now actually flips the plan to `aggregator=COUNT_DISTINCT` and reaches `reinvestigated` instead of bouncing to `audit_required` on plan-vs-answer mismatch.
 
 ### Check OpenRouter Credit
 
@@ -278,9 +291,11 @@ ruff check .
 Current test status:
 
 ```text
-71 passed
+160 passed
 ruff clean
 ```
+
+Bi-directional test discipline (hard rule from R6): every plan-driven check ships with a trigger test that fails AND an inverse test that passes the opposite scenario. Example: `aggregate_member_in_breakdown` has a triggering test (plan excludes `Total`, answer includes a `Total` row → fail) AND an inverse test (plan does NOT exclude `Total`, answer includes a `Total` row → pass). This prevents the "coded to Q1–Q5" failure mode — every mechanism must be plan-driven or data-driven, never question-id-driven.
 
 Coverage highlights:
 
@@ -288,10 +303,17 @@ Coverage highlights:
 - `test_data_loader.py`: CSV loading is idempotent.
 - `test_contracts.py`: Pydantic contracts round-trip.
 - `test_planner.py`: Planner QA enforces MTU multi-definition, MoM trend fields, Ops/canonical comparison, and Total-row exclusion.
-- `test_answer_shape_validation.py`: semantic pre-flight catches missing required columns, missing multi-definition values, integer-division MoM percentage bugs, aggregate members in breakdowns, and LLM-provided metric values.
+- `test_planner_trace.py`: Derivation trace validator rejects hallucinated grains, missing rejection reasons, dangling chosen-source references, infeasible scope predicates, hallucinated filter columns, aggregator rationale without grain-mention.
+- `test_pre_flight.py`: bi-directional coverage of every plan-driven and trace-driven shape check (32 tests).
+- `test_sql_attempt.py`: success path, exec failure → schema-hint correction → success, pre-flight failure → retry → success, budget exhaustion → SystemError.
+- `test_replan_question.py` (R8): reviewer note motivates plan change → revision validates; SQL-only complaint → plan unchanged via `revision_note`; hallucinated revision → validator rejects.
+- `test_workflow_reinvestigation.py` (R8): end-to-end replay of "row count, not SUM" reviewer-correction case → terminal=reinvestigated, not audit_required.
+- `test_cli_ask.py`: `pluang-agent ask` happy path, overrides honoured, planner failure exits non-zero.
+- `test_synthesize_question.py`: metric/period inference, slug+timestamp id determinism, override precedence.
 - `test_layer_b.py`: cross-source reconciliation catches Ops status-filter deltas, fixed-FX USD deltas, and stale December Total row.
 - `test_layer_c.py`: LLM Layer C parses valid JSON and falls back safely on invalid output.
 - `test_system_error_escalation.py`: auth/quota/transient/output failures route to audit rather than deterministic fallback.
+- `test_review.py`: HITL panel formatter unit tests (Key Facts, Derivation panel, pretty SQL).
 - `test_golden_sql.py`: fixture-only canonical SQL verifies numeric truth on the real CSVs.
 
 ---
@@ -394,24 +416,36 @@ The architectural decision that buys us this trajectory is that the **Planner QA
 
 ```text
 src/pluang_agent/
-  planner.py              QuestionPlan builder + Planner QA gate
-  agents/sql_agent.py     LLM SQL proposal from validated plan
+  planner.py              skeleton plan + LLM trace + LLM revise (R8) + validator
+  agents/sql_agent.py     LLM SQL proposal from validated plan + trace
   agents/quality_agent.py Layer A/B/C orchestrator
-  pre_flight.py           semantic answer-shape validation
+  sql_attempt.py          one-attempt orchestration (agent + execute + pre-flight)
+  pre_flight.py           plan-driven + trace-driven shape validation
   layer_b.py              cross-source reconciliation
   layer_c.py              trust profile composer
-  workflow.py             LangGraph orchestration + HITL routing
-  review.py               Rich human-review panel
-  llm.py                  OpenRouter client + cost logging
+  workflow.py             LangGraph orchestration + unified retry + HITL routing
+  review.py               Rich review panel (Key Facts header + Derivation panel)
+  llm.py                  OpenRouter client + cost logging + mock client
   sql_runner.py           read-only SQL execution guard
   metadata.py             dbt YAML schema context renderer
   metrics.py              metrics.yml loader
+  questions.py            REQUIRED_QUESTIONS + ad-hoc question synthesis
+  cli.py                  setup / run / ask / cost / review-demo commands
+  models.py               Pydantic contracts (QuestionPlan, DerivationTrace, etc.)
 
-prompts/                  SQL Agent and QA prompts
+prompts/
+  sql_agent_system.md     SQL Agent system prompt
+  sql_agent_user.md       per-question user template
+  planner_trace.md        derivation trace proposal prompt
+  planner_revise.md       plan revision prompt (R8)
+  qa_layer_b_hypothesis.md
+  qa_layer_c_compose.md
+
 metrics.yml               metric registry
-instructions.yml          table warnings
-outputs/sample/           final submission evidence
-tests/                    unit and integration tests
+instructions.yml          per-table ⚠️ warnings
+outputs/sample/           final submission evidence (five demo questions)
+outputs/ask/              gitignored — per-invocation ad-hoc question artifacts
+tests/                    160 unit + integration tests
 ```
 
 ---
