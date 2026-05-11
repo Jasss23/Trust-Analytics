@@ -44,15 +44,21 @@ from pluang_agent.models import (
     PlanPeriod,
     PlanSource,
     QuestionPlan,
+    SQLAgentAnswer,
     SystemError,
 )
 
 _PROMPTS_DIR = Path(__file__).parents[2] / "prompts"
 _TRACE_BUDGET = 1  # one retry on validation failure (planner's own budget)
+_REVISE_BUDGET = 1
 
 
 def _load_trace_prompt() -> str:
     return (_PROMPTS_DIR / "planner_trace.md").read_text(encoding="utf-8")
+
+
+def _load_revise_prompt() -> str:
+    return (_PROMPTS_DIR / "planner_revise.md").read_text(encoding="utf-8")
 
 
 @dataclass(frozen=True)
@@ -840,3 +846,215 @@ def _table_columns(metadata: DbtMetadata) -> dict[str, set[str]]:
     for model in metadata.models.get("models", []):
         out[model["name"]] = {col["name"] for col in model.get("columns", [])}
     return out
+
+
+# ---------------------------------------------------------------------------
+# R8: LLM-driven plan revision on reinvestigation
+# ---------------------------------------------------------------------------
+
+
+def replan_question(
+    question: BusinessQuestion,
+    previous_plan: QuestionPlan,
+    previous_answer: SQLAgentAnswer,
+    reviewer_note: str,
+    registry: MetricsRegistry,
+    metadata: DbtMetadata,
+    llm_client: LLMClient,
+) -> PlannerResult:
+    """Revise a plan with reviewer feedback (LLM) + re-derive its trace.
+
+    Used by the workflow's `reinvestigate_rejections` node for
+    `answer_wrong` / `source_wrong` categories. The reviewer note may
+    require a plan change (different metric, aggregator, source, shape);
+    the LLM proposes the revision; the existing deterministic validator
+    gates it; the trace phase re-runs against the new plan.
+
+    Returns:
+        PlannerResult with revised plan + new derivation_trace on success,
+        or `system_error` if revision / validation / trace fails.
+    """
+    revised_result = _propose_and_validate_revision(
+        question=question,
+        previous_plan=previous_plan,
+        previous_answer=previous_answer,
+        reviewer_note=reviewer_note,
+        registry=registry,
+        metadata=metadata,
+        llm_client=llm_client,
+    )
+    if revised_result.system_error is not None:
+        return PlannerResult(plan=None, system_error=revised_result.system_error)
+
+    revised_plan = revised_result.plan
+    assert revised_plan is not None  # validator passed → plan is non-None
+
+    # Re-derive a fresh trace against the revised plan. Trace is plan-
+    # specific (it defends the plan's source/aggregator/grain choices);
+    # using the stale trace would defeat the whole point of revision.
+    trace_result = _propose_and_validate_trace(
+        question=question,
+        plan=revised_plan,
+        registry=registry,
+        metadata=metadata,
+        llm_client=llm_client,
+    )
+    if trace_result.system_error is not None:
+        return PlannerResult(plan=revised_plan, system_error=trace_result.system_error)
+    return PlannerResult(plan=revised_plan, derivation_trace=trace_result.trace)
+
+
+@dataclass(frozen=True)
+class _ReviseResult:
+    plan: QuestionPlan | None
+    revision_note: str | None = None  # set when LLM emitted plan unchanged
+    system_error: SystemError | None = None
+
+
+def _propose_and_validate_revision(
+    question: BusinessQuestion,
+    previous_plan: QuestionPlan,
+    previous_answer: SQLAgentAnswer,
+    reviewer_note: str,
+    registry: MetricsRegistry,
+    metadata: DbtMetadata,
+    llm_client: LLMClient,
+) -> _ReviseResult:
+    """LLM-revise the plan + run the deterministic validator. Up to
+    _REVISE_BUDGET retries on validation failure."""
+    system_prompt = _load_revise_prompt()
+    correction: str | None = None
+    last_error_detail = ""
+    for attempt in range(_REVISE_BUDGET + 1):
+        user_prompt = _render_revise_user_prompt(
+            question, previous_plan, previous_answer, reviewer_note, registry, metadata, correction
+        )
+        stage = (
+            f"planner_revise:{question.id}"
+            if attempt == 0
+            else f"planner_revise_retry:{question.id}"
+        )
+        try:
+            response = llm_client.chat_json(system_prompt, user_prompt, stage_tag=stage)
+        except LLMError as exc:
+            return _ReviseResult(
+                plan=None,
+                system_error=SystemError(
+                    error_class=getattr(exc, "error_class", "llm_error"),  # type: ignore[arg-type]
+                    message=f"Plan revision LLM call failed: {exc}",
+                    suggested_action="Investigate the LLM call. Auth/quota issues fail at this layer too.",
+                    raw=type(exc).__name__,
+                ),
+            )
+
+        try:
+            payload = _loads_json_object(response.content)
+        except (json.JSONDecodeError, LLMOutputError) as exc:
+            last_error_detail = f"revise_parse_error: {exc!s}"
+            correction = (
+                f"Your previous output failed to parse as a QuestionPlan: "
+                f"{last_error_detail}. Return a valid JSON object exactly "
+                f"matching the contract."
+            )
+            continue
+
+        revision_note = payload.pop("revision_note", None)
+        try:
+            revised_plan = QuestionPlan.model_validate(payload)
+        except ValueError as exc:
+            last_error_detail = f"revise_validation_error: {exc!s}"
+            correction = (
+                f"Your previous output failed Pydantic validation: "
+                f"{last_error_detail}. Fix the structure."
+            )
+            continue
+
+        # Idempotence safety: question_id must be preserved.
+        if revised_plan.question_id != previous_plan.question_id:
+            last_error_detail = (
+                f"revised plan changed question_id ({previous_plan.question_id!r} → "
+                f"{revised_plan.question_id!r}); question_id must be preserved."
+            )
+            correction = last_error_detail
+            continue
+
+        issues = validate_question_plan(revised_plan, question, metadata, registry)
+        if not issues:
+            return _ReviseResult(plan=revised_plan, revision_note=revision_note)
+        last_error_detail = "; ".join(issues[:6])
+        correction = (
+            f"Your revised plan failed validation: {last_error_detail}. "
+            "Address each issue. Only change fields the reviewer note implies "
+            "should change."
+        )
+
+    return _ReviseResult(
+        plan=None,
+        system_error=SystemError(
+            error_class="plan_revision_failed",
+            message=(
+                f"Plan revision validator rejected proposals after "
+                f"{_REVISE_BUDGET + 1} attempt(s). Last failure: {last_error_detail}"
+            ),
+            suggested_action=(
+                "Inspect the planner_revise prompt + the reviewer note. The "
+                "revised plan failed structural validation (hallucinated "
+                "table/column, malformed period, shape invariant violation, "
+                "or question_id rewrite)."
+            ),
+            raw=last_error_detail[:500],
+        ),
+    )
+
+
+def _render_revise_user_prompt(
+    question: BusinessQuestion,
+    previous_plan: QuestionPlan,
+    previous_answer: SQLAgentAnswer,
+    reviewer_note: str,
+    registry: MetricsRegistry,
+    metadata: DbtMetadata,
+    correction: str | None,
+) -> str:
+    schema_ctx = describe_schema_context(metadata)
+    entry = registry.get(question.id)
+    registry_block = (
+        _render_registry_for_trace(entry)
+        if entry is not None
+        else "(no registry entry for this question — revise from schema context only)"
+    )
+    plan_block = previous_plan.model_dump_json(indent=2)
+    # Summarise the previous answer — full result_rows would be huge.
+    rows_preview = previous_answer.result_rows[:3]
+    answer_summary = {
+        "chosen_source": previous_answer.source.primary_table if previous_answer.source else None,
+        "sql": previous_answer.sql,
+        "first_rows": rows_preview,
+        "row_count": len(previous_answer.result_rows),
+    }
+    answer_block = json.dumps(answer_summary, indent=2, default=str)
+    correction_block = ""
+    if correction:
+        correction_block = (
+            "\n\n## Correction\nYour previous revision attempt failed. Address:\n"
+            f"{correction}\n"
+        )
+    return (
+        "## Schema context\n"
+        f"{schema_ctx}\n\n"
+        "## Metric registry entry\n"
+        f"{registry_block}\n\n"
+        "## Previous QuestionPlan\n"
+        f"```json\n{plan_block}\n```\n\n"
+        "## Previous SQL Agent answer (summary)\n"
+        f"```json\n{answer_block}\n```\n\n"
+        "## Business question\n"
+        f"{question.text}\n\n"
+        f"Question id: {question.id}\n"
+        f"Inferred metric: {question.metric}\n"
+        f"Inferred period: {question.period}\n\n"
+        "## Reviewer rejection\n"
+        f"Note: {reviewer_note}\n"
+        f"{correction_block}\n"
+        "Return the revised QuestionPlan JSON now."
+    )

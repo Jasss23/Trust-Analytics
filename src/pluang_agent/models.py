@@ -64,6 +64,7 @@ class SystemError(BaseModel):
         "planner_validation_failed",
         "answer_shape_validation_failed",
         "trace_validation_failed",
+        "plan_revision_failed",
     ]
     message: str
     suggested_action: str

@@ -38,7 +38,7 @@ from pluang_agent.models import (
     SystemError,
     TerminalState,
 )
-from pluang_agent.planner import plan_question
+from pluang_agent.planner import plan_question, replan_question
 from pluang_agent.review import collect_review_decisions, summarize_terminal_states
 from pluang_agent.sql_attempt import mark_budget_exhausted, run_one_attempt
 
@@ -178,15 +178,33 @@ def run_pipeline(
                     question_plan=item.question_plan,
                 )
             else:
-                # answer_wrong / source_wrong — re-prompt SQL Agent with the
-                # reviewer note as the correction context, then re-run QA.
-                planned = plan_question(
-                    item.question,
-                    registry,
-                    metadata,
-                    reviewer_note=decision.note,
-                    llm_client=sql_agent.llm_client,
-                )
+                # answer_wrong / source_wrong — R8: LLM-revise the plan with
+                # reviewer feedback, then re-derive trace + re-run SQL Agent
+                # + pre-flight. The reviewer note flows BOTH into the revised
+                # plan AND into the SQL Agent's correction context, so the
+                # plan-vs-answer validator no longer catches a stale mismatch
+                # when the reviewer correctly identified a metric/aggregator/
+                # column inference error.
+                if item.question_plan is None:
+                    # No previous plan to revise (e.g. system_error path).
+                    # Fall back to fresh planning.
+                    planned = plan_question(
+                        item.question,
+                        registry,
+                        metadata,
+                        reviewer_note=decision.note,
+                        llm_client=sql_agent.llm_client,
+                    )
+                else:
+                    planned = replan_question(
+                        question=item.question,
+                        previous_plan=item.question_plan,
+                        previous_answer=item.answer,
+                        reviewer_note=decision.note or "",
+                        registry=registry,
+                        metadata=metadata,
+                        llm_client=sql_agent.llm_client,
+                    )
                 if planned.system_error is not None or planned.plan is None:
                     item.reinvestigated_answer = _planner_error_answer(
                         item.question,
@@ -195,7 +213,12 @@ def run_pipeline(
                     item.reinvestigated_quality_report = quality_agent.assess(
                         item.reinvestigated_answer
                     )
-                    _route_to_audit(item, decision, reason="planner_validation_failed")
+                    reason = (
+                        planned.system_error.error_class
+                        if planned.system_error is not None
+                        else "planner_validation_failed"
+                    )
+                    _route_to_audit(item, decision, reason=reason)
                     continue
                 item.question_plan = planned.plan
                 correction = CorrectionContext(
