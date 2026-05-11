@@ -165,6 +165,136 @@ def review_demo(
 
 
 @app.command()
+def ask(
+    question_text: str = typer.Argument(..., help="Free-form natural-language question."),
+    metric: str | None = typer.Option(
+        None, "--metric", help="Override the inferred metric name."
+    ),
+    period: str | None = typer.Option(
+        None, "--period", help="Override the inferred period string (e.g. 'October 2025')."
+    ),
+    no_review: bool = typer.Option(
+        False, "--no-review", help="Skip the interactive review prompt (CI / scripted use)."
+    ),
+    output_dir: Path | None = typer.Option(
+        None,
+        "--output-dir",
+        help="Override the default outputs/ask/<id>/ location.",
+    ),
+    db_path: Path | None = typer.Option(None, "--db-path"),
+    data_dir: Path | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Ask the agent a one-off natural-language question (R7).
+
+    Goes through the same pipeline as `run`: planner (hybrid LLM trace +
+    deterministic validator) → SQL Agent → execute → pre-flight → QA →
+    human review. Works on any question, registered or not. When the
+    planner can't construct a defensible trace, the question routes to
+    AUDIT_REQUIRED with a structured hand-off — the CLI prints the
+    failure reason and exits non-zero.
+    """
+    from pluang_agent.agents.quality_agent import QualityAgent
+    from pluang_agent.agents.sql_agent import SQLAgent
+    from pluang_agent.llm import make_client
+    from pluang_agent.metadata import case_root_from_data_dir, load_dbt_metadata
+    from pluang_agent.metrics import load_metrics_registry
+    from pluang_agent.questions import synthesize_business_question
+    from pluang_agent.workflow import run_pipeline, write_pipeline_outputs
+
+    settings = load_settings()
+    resolved_db_path = _resolve_path_option(db_path, settings.db_path)
+    resolved_data_dir = _resolve_path_option(data_dir, settings.data_dir)
+    if not resolved_db_path.exists():
+        raise typer.BadParameter(
+            f"SQLite DB does not exist at {resolved_db_path}. Run `pluang-agent setup` first."
+        )
+
+    if os.getenv("PLUANG_LLM_MOCK") != "1" and not settings.openrouter_api_key:
+        raise typer.BadParameter(
+            "OPENROUTER_API_KEY is not set. Either set the key in .env or run "
+            "with PLUANG_LLM_MOCK=1 to use the fixture-based mock client."
+        )
+
+    question = synthesize_business_question(
+        question_text,
+        metric_override=metric,
+        period_override=period,
+    )
+
+    out = output_dir or (Path("outputs/ask") / question.id)
+    metadata = load_dbt_metadata(case_root_from_data_dir(resolved_data_dir))
+    metrics_registry = load_metrics_registry()
+    llm_client = make_client(settings)
+    sql_agent = SQLAgent(
+        db_path=resolved_db_path,
+        metadata=metadata,
+        llm_client=llm_client,
+        metrics_registry=metrics_registry,
+    )
+    quality_agent = QualityAgent(
+        db_path=resolved_db_path,
+        metrics_registry=metrics_registry,
+        llm_client=llm_client,
+    )
+
+    review_mode = ReviewMode.DEMO_APPROVE if no_review else ReviewMode.INTERACTIVE
+    result = run_pipeline([question], sql_agent, quality_agent, review_mode)
+    write_pipeline_outputs(result, out)
+
+    from pluang_agent.review import render_reinvestigation_diffs
+    render_reinvestigation_diffs(result.items)
+
+    item = result.items[0]
+    exit_code = _render_ask_summary(item, out)
+    if exit_code != 0:
+        raise typer.Exit(code=exit_code)
+
+
+def _render_ask_summary(item, out_dir: Path) -> int:
+    """Render a tight single-question summary and return a process exit code.
+
+    Exit code 0 on APPROVED. Non-zero on AUDIT_REQUIRED with a clear
+    failure reason (system_error / audit_handoff) so scripted use can
+    distinguish success from a structured failure.
+    """
+    decision = item.review_decision
+    terminal = decision.terminal_state.value if decision and decision.terminal_state else "unknown"
+    tp = item.quality_report.layer_c.trust_profile
+
+    table = Table(title=f"Ask result — {item.question.id}", show_header=False)
+    table.add_column("Field", style="bold cyan", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Question", item.question.text)
+    table.add_row("Inferred metric", item.question.metric)
+    table.add_row("Inferred period", item.question.period)
+    table.add_row("Terminal", terminal)
+    table.add_row("Trust", tp.overall)
+    table.add_row("Reviewer summary", tp.reviewer_summary)
+    table.add_row("Output dir", str(out_dir))
+    console.print(table)
+
+    if terminal == "audit_required":
+        err = item.answer.system_error
+        if err is not None:
+            console.print(
+                f"[bold red]Pipeline could not answer this question.[/bold red] "
+                f"({err.error_class}) {err.message}"
+            )
+            console.print(f"[yellow]Suggested action:[/yellow] {err.suggested_action}")
+        elif item.audit_handoff is not None:
+            console.print(
+                "[bold red]Pipeline routed this question to audit_required.[/bold red]"
+            )
+            for q in item.audit_handoff.unresolved_questions:
+                console.print(f"  • {q}")
+        else:
+            console.print("[bold red]audit_required (no structured reason).[/bold red]")
+        return 1
+
+    return 0
+
+
+@app.command()
 def cost() -> None:
     """Report OpenRouter usage and remaining credit."""
     from pluang_agent.llm import LLMError, OpenRouterClient

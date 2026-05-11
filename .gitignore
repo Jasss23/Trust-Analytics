@@ -5,6 +5,7 @@ docs/pluang_analytics_agent/data/
 docs/pluang_analytics_agent/
 docs/MLE Analytics Agent Case Study JIashun.docx
 var/
+outputs/ask/
 *.sqlite
 *.sqlite3
 *.db

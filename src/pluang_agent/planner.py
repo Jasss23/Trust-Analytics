@@ -637,8 +637,8 @@ def _plan_from_registry(
 
 def _plan_from_question(question: BusinessQuestion) -> QuestionPlan:
     text = question.text.lower()
-    period = _parse_period(text) or PlanPeriod(start="2025-10-01", end="2025-11-01")
-    metric = _metric_intent(text, question.metric)
+    period = infer_period_from_text(text) or PlanPeriod(start="2025-10-01", end="2025-11-01")
+    metric = infer_metric_intent(text, question.metric)
     requested_ops = "ops" in text or "dashboard" in text
     breakdown = PlanBreakdown(
         dimension="asset_class",
@@ -719,7 +719,15 @@ def _asks_period_over_period(text: str) -> bool:
     return any(token in text for token in ("month-on-month", "mom", "trend", "period-over-period"))
 
 
-def _metric_intent(text: str, fallback: str) -> str:
+def infer_metric_intent(text: str, fallback: str = "adhoc_metric") -> str:
+    """Heuristic mapping from a question's text to a metric name.
+
+    Public since R7 because `questions.synthesize_business_question` reuses
+    this for ad-hoc questions; the same heuristic that drives the planner's
+    own `_plan_from_question` fallback drives metric inference for the
+    `pluang-agent ask` CLI surface.
+    """
+    text = text.lower()
     if "gtv" in text and "usd" in text:
         return "gtv_usd"
     if "gtv" in text:
@@ -785,7 +793,18 @@ def _required_columns(
     return [value_col]
 
 
-def _parse_period(text: str) -> PlanPeriod | None:
+def infer_period_from_text(text: str) -> PlanPeriod | None:
+    """Heuristic extraction of a (start, end) period from question text.
+
+    Matches month-year pairs like "October 2025" or "October 2025 to December
+    2025"; returns the inclusive-start, exclusive-end window covering the
+    first to (next month of the) last match. Returns None when no month is
+    found.
+
+    Public since R7 because `questions.synthesize_business_question` reuses
+    this for ad-hoc question construction.
+    """
+    text = text.lower()
     months = [(m, y) for m, y in re.findall(
         r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})",
         text,

@@ -174,6 +174,25 @@ pluang-agent run --review-mode demo-approve
 pluang-agent run --review-mode demo-reject
 ```
 
+### Ask Your Own Question (R7)
+
+The `ask` command takes any natural-language question and runs it through the same pipeline as the five demo questions — hybrid planner (LLM-proposed `DerivationTrace` + deterministic validator) → SQL Agent → execute → pre-flight → QA → human review.
+
+```bash
+# Free-form question; metric + period inferred from the text
+pluang-agent ask "What was total GTV (USD) in October 2025?"
+
+# Skip the interactive review prompt (CI / scripted use)
+pluang-agent ask "How many crypto transactions in November 2025?" --no-review
+
+# Override the inferred metric or period when the heuristics get it wrong
+pluang-agent ask "Year-end snapshot" --metric gtv_idr --period "December 2025"
+```
+
+Outputs are written to `outputs/ask/<synthesised_id>/` (a fresh subdirectory per invocation so the five-question demo samples stay clean). Each ad-hoc run produces the same four files as `run`: `sql_agent_answers.json`, `quality_report.json`, `question_plans.json`, and a `review_*.log`.
+
+When the planner can't construct a defensible derivation trace (unregistered metric the LLM can't ground in the schema, ambiguous question with no canonical source, etc.), the question routes to `audit_required` with a structured `AuditHandoff`. The CLI prints the failure reason and exits non-zero — *no question crashes the pipeline*, but not every question gets answered.
+
 ### Check OpenRouter Credit
 
 ```bash
