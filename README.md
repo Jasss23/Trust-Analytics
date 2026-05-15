@@ -50,8 +50,7 @@ question
                 re-derive trace, re-run SQL Agent
 ```
 
-<!-- Optional screenshot placeholder; safe to leave broken. See docs/screenshots/README.md -->
-![Pipeline result — demo-reject terminal output](docs/screenshots/tldr_cli_result.png)
+![Pipeline result — demo-reject and demo-approve terminal output](docs/screenshots/tldr_cli_result.png)
 
 ### Result on the 5 required questions
 
@@ -84,6 +83,9 @@ pluang-agent ask "How did GTV stack up across asset classes for October 2025?"
 pluang-agent ask "How many crypto transactions in November 2025?" --no-review
 pluang-agent ask "Year-end snapshot" --metric gtv_idr --period "December 2025"
 ```
+
+![pluang-agent ask — review panel top](docs/screenshots/ask_output_top.png)
+![pluang-agent ask — review panel bottom](docs/screenshots/ask_output_bottom.png)
 
 A captured ad-hoc invocation is committed at `outputs/sample/ask_example/`
 (plans + answers + QA + review log) so the contract shape is visible even
@@ -130,8 +132,7 @@ question
               re-derive trace, re-run SQL Agent
 ```
 
-<!-- Optional architecture diagram screenshot. See docs/screenshots/README.md -->
-![Architecture diagram placeholder](docs/screenshots/architecture_diagram.png)
+![Architecture diagram](docs/screenshots/architecture_diagram.png)
 
 ### Components
 
@@ -362,8 +363,8 @@ QA Summary - flag first, hypothesise where grounded
                                 being included via status != 'failed'.
 ```
 
-<!-- Optional rendered panel screenshot. See docs/screenshots/README.md -->
-![Interactive review panel for Q1](docs/screenshots/review_panel_q1.png)
+![Interactive review panel for Q1 — top (Key facts / Derivation / why_chosen)](docs/screenshots/review_panel_q1_top.png)
+![Interactive review panel for Q1 — bottom (Answer / QA Summary / Layer A / Layer B)](docs/screenshots/review_panel_q1_bottom.png)
 
 When the hypothesis would be a guess, the system records *null with an
 absence note* rather than filling the field. See
@@ -684,8 +685,7 @@ Every live LLM call appends one JSON line to `logs/cost.jsonl`:
 }
 ```
 
-<!-- Optional cost log screenshot. See docs/screenshots/README.md -->
-![Cost log excerpt placeholder](docs/screenshots/cost_log_excerpt.png)
+
 
 ### Cost-saving choices
 

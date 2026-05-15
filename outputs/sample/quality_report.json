@@ -118,10 +118,10 @@
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher GTV due to pending transactions included, with a HIGH confidence hypothesis explaining the observed delta of +13.71%."
+        "reviewer_summary": "Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher GTV due to pending transactions included, with a HIGH confidence hypothesis explaining the observed delta of +13.71%."
       },
       "unresolved_questions": [
-        "Determine which source is authoritative regarding the treatment of pending transactions in GTV calculations."
+        "Which source should be considered authoritative for the GTV figures given the disagreement?"
       ]
     },
     "question_id": "q1_gtv_idr_by_asset_oct_2025"
@@ -226,7 +226,7 @@
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A is clean. Layer B indicates cross-source DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard's higher GTV is attributed to pending transactions and a fixed conversion rate, with a HIGH confidence hypothesis explaining the observed delta."
+        "reviewer_summary": "Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher GTV due to pending transactions and a fixed conversion rate, with a HIGH confidence hypothesis explaining the observed delta."
       },
       "unresolved_questions": [
         "Determine which source is authoritative for the GTV figures given the disagreement."
@@ -307,7 +307,7 @@
           "source_reliability": "YELLOW"
         },
         "overall": "YELLOW",
-        "reviewer_summary": "Layer A is clean with all checks passing. Layer B is marked as NOT APPLICABLE due to definitional differences in MTU, leading to one interpretation choice regarding AUM-defined MTU."
+        "reviewer_summary": "Layer A is clean with all checks passing. Layer B is NOT APPLICABLE due to definitional differences in MTU, which leads to one interpretation choice regarding AUM-defined MTU."
       },
       "unresolved_questions": []
     },
@@ -414,9 +414,9 @@
       "hypothesis": {
         "confidence": "HIGH",
         "evidence": [
-          "Ops note: 'filters status != failed'. Expected to be HIGHER by ~10-15%.",
-          "Observed ops delta = +12.7555%, within the expected 10-15% range.",
-          "agg_monthly_biz_summary matches fct exactly (delta 0%), confirming fct is the canonical completed-transaction source."
+          "Ops note: 'filters status != failed'. Expected to be HIGHER by ~10-15%'",
+          "Observed ops delta = +12.7555%, within the expected 10-15% range",
+          "agg_monthly_biz_summary matches fct exactly (delta 0%), confirming fct is the canonical completed-transaction source"
         ],
         "proposal": "mart_ops_dashboard's higher transaction counts reflect pending transactions being included via status != 'failed'.",
         "what_this_does_not_explain": "None \u2014 the per-source notes fully explain the observed pattern."
@@ -432,10 +432,10 @@
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A is clean. Layer B indicates cross-source DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher transaction counts likely due to pending transactions included via status != 'failed'; the LLM hypothesis has HIGH confidence and is supported by operational notes."
+        "reviewer_summary": "Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 3 findings \u2014 the mart_ops_dashboard shows higher transaction counts due to pending transactions included via status != 'failed'; the LLM hypothesis has HIGH confidence and is supported by evidence."
       },
       "unresolved_questions": [
-        "Confirm which source is authoritative for the transaction counts, given the disagreement between mart_ops_dashboard and fct_trading_daily."
+        "Confirm which source is authoritative for the transaction counts: mart_ops_dashboard or fct_trading_daily."
       ]
     },
     "question_id": "q4_transaction_count_by_asset_oct_2025"
@@ -542,7 +542,7 @@
           "source_reliability": "RED"
         },
         "overall": "RED",
-        "reviewer_summary": "Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 2 findings \u2014 December 2025 values for agg_monthly_biz_summary disagree with fct_trading_daily by ~3.46%; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting that month's total."
+        "reviewer_summary": "Layer A is clean. Layer B flags cross-source DISAGREEMENT in 2 findings \u2014 December 2025 agg_monthly_biz_summary disagrees with fct_trading_daily by ~3.5%; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue affecting that month's total."
       },
       "unresolved_questions": [
         "Confirm fct_trading_daily is the authoritative source for the December figure (per the stale-Total team backlog)."

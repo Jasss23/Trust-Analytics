@@ -7,7 +7,7 @@ Retry budget: used 0/2 (remaining 2)
 Attempts: ['success']
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher GTV due to pending transactions included, with a HIGH confidence hypothesis explaining the observed delta of +13.71%.
+QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher GTV due to pending transactions included, with a HIGH confidence hypothesis explaining the observed delta of +13.71%.
 
 Question: q2_gtv_usd_oct_2025
 Decision: approve
@@ -15,34 +15,37 @@ Retry budget: used 0/2 (remaining 2)
 Attempts: ['success']
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A is clean. Layer B indicates DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher GTV due to pending transactions and a fixed conversion rate, with a HIGH confidence hypothesis explaining the observed delta of +21.71%.
+QA summary: Layer A is clean. Layer B indicates cross-source DISAGREEMENT in 3 findings — the mart_ops_dashboard's higher GTV is attributed to pending transactions and a fixed conversion rate, with a HIGH confidence hypothesis explaining the observed delta.
 
 Question: q3_mtu_oct_2025
 Decision: approve
-Retry budget: used 0/2 (remaining 2)
-Attempts: ['success']
+Retry budget: used 1/2 (remaining 1)
+Attempts: ['exec_failure', 'success']
 Terminal state: approved
 Trust profile: YELLOW (correctness=GREEN source=YELLOW ambiguity=YELLOW)
 QA summary: Layer A is clean with all checks passing. Layer B is marked as NOT APPLICABLE due to definitional differences in MTU, leading to one interpretation choice regarding AUM-defined MTU.
 
 Question: q4_transaction_count_by_asset_oct_2025
 Decision: approve
-Retry budget: used 0/2 (remaining 2)
-Attempts: ['success']
+Retry budget: used 1/2 (remaining 1)
+Attempts: ['llm_soft_failure', 'success']
 Terminal state: approved
 Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
-QA summary: Layer A is clean. Layer B indicates cross-source DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher transaction counts likely due to pending transactions included via status != 'failed', with a HIGH confidence hypothesis explaining the observed pattern.
+QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 3 findings — the mart_ops_dashboard shows higher transaction counts likely due to pending transactions included via status != 'failed', with a HIGH confidence hypothesis explaining the observed pattern.
 
 Question: q5_gtv_mom_trend_oct_dec_2025
 Decision: reject
 Category: source_wrong
 Note: Trend answer should be reinvestigated because the December business summary Total row disagrees with fct_trading_daily.
-Retry budget: used 2/2 (remaining 0)
-Attempts: ['pre_flight_failure', 'pre_flight_failure', 'pre_flight_failure']
+Retry budget: used 1/2 (remaining 1)
+Attempts: ['success', 'pre_flight_failure']
 Terminal state: audit_required
-Audit reason: auto_retry_exhausted
-System error: [auto_retry_exhausted] Unified retry budget exhausted after pre_flight_failure. Last failure: empty_result: The previous SQL returned zero rows. Re-check the period filter format (period_column stores YYYY-MM-DD, not YYYY-MM); re-check every extra_filter; and confirm the table actually has rows in the requested period.
-Suggested action: Inspect the captured attempts in the audit hand-off package. Either fix the underlying metric registry entry / instructions warning, expand the schema context, or escalate to a human analyst for the question.
-Trust profile: RED (correctness=RED source=RED ambiguity=RED)
-QA summary: Pipeline halted — auto_retry_exhausted: Unified retry budget exhausted after pre_flight_failure. Last failure: empty_result: The previous SQL returned zero rows. Re-check the period filter format (period_column stores YYYY-MM-DD, not YYYY-MM); re-check every extra_filter; and confirm the table actually has rows in the requested period.
-Audit hand-off unresolved_questions: ['Inspect the captured attempts in the audit hand-off package. Either fix the underlying metric registry entry / instructions warning, expand the schema context, or escalate to a human analyst for the question.']
+Audit reason: pre_flight_failure
+Trust profile: RED (correctness=GREEN source=RED ambiguity=GREEN)
+QA summary: Layer A is clean. Layer B indicates a cross-source DISAGREEMENT in 2 findings — December 2025 values for agg_monthly_biz_summary are 3.46% lower than fct_trading_daily; the LLM hypothesis (HIGH confidence) attributes this to the known stale data issue.
+Reinvestigated trust profile: RED — Pipeline halted — answer_shape_validation_failed: Reinvestigation attempt did not produce an acceptable answer: sql_source_mismatch: SQL must query the validated primary source fct_trading_daily.
+Reinvestigation diff:
+  source.primary_table: fct_trading_daily → fct_trading_daily
+  trust profile: RED → RED
+  sql (first line): SELECT strftime('%Y-%m-01', transaction_date) AS month, SUM(gtv_idr) AS gtv_idr, ... (changed)
+Audit hand-off unresolved_questions: ['Inspect the failed reinvestigation attempt and validated question plan. Do not approve this item until the answer satisfies shape/source validation.']

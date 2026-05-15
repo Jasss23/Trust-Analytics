@@ -16,3 +16,4 @@ the README is fully self-contained in text):
 | `review_panel_q1.png` | The interactive Rich panel for Q1 from `pluang-agent run` (the one already exported as text in `outputs/sample/review_panel_rendered.txt`). A colored screenshot makes the FLAGS / HYPOTHESIS split land harder than the text version. |
 | `architecture_diagram.png` | A boxed-and-arrowed version of the ASCII architecture diagram in the README (planner → SQL Agent → pre-flight → Quality Agent → Human Review). Optional — the ASCII diagram is already in the README. |
 | `cost_log_excerpt.png` | One screenshot of `logs/cost.jsonl` viewed in a terminal or browser, showing per-call attribution and the `cost_usd` field. |
+| `ask_output.png` | The terminal output of `pluang-agent ask "How did GTV stack up across asset classes for October 2025?"` — shows the plan, answer, QA summary, and review decision for an ad-hoc NL question. |
