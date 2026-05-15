@@ -441,6 +441,21 @@ cp .env.example .env
 
 ### Load data
 
+Set `PLUANG_DATA_DIR` in `.env` to the directory containing the 7 CSVs
+provided with the case study:
+
+```
+raw_transactions.csv
+dim_users.csv
+aum_monthly_snapshot.csv
+stg_mixpanel_events.csv
+fct_trading_daily.csv
+agg_monthly_biz_summary.csv
+mart_ops_dashboard.csv
+```
+
+Then load them into SQLite:
+
 ```bash
 pluang-agent setup
 ```
