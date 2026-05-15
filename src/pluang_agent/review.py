@@ -209,8 +209,19 @@ def _render_review_panel(item: PipelineItem) -> None:
             )
         )
 
-    # Layer A — checks table
-    a_table = Table(title="Layer A — Rule-based checks", show_lines=False, expand=True)
+    # QA Summary — visually emphasise the case study's flag-vs-hypothesis
+    # distinction. FLAGS = what we deterministically know; HYPOTHESIS = what
+    # we suspect (LLM-proposed, grounded in evidence, MAY be null).
+    _render_qa_summary(qa)
+
+    # Layer A — FLAGS (deterministic checks)
+    a_total = len(qa.layer_a.checks)
+    a_failed = sum(1 for c in qa.layer_a.checks if c.result == "FAIL")
+    a_table = Table(
+        title=f"Layer A — FLAGS (deterministic checks)  {a_total - a_failed}/{a_total} pass",
+        show_lines=False,
+        expand=True,
+    )
     a_table.add_column("Check")
     a_table.add_column("Result")
     a_table.add_column("Detail / evidence")
@@ -222,7 +233,7 @@ def _render_review_panel(item: PipelineItem) -> None:
         a_table.add_row(c.name, Text(c.result, style=result_style), ev)
     console.print(a_table)
 
-    # Layer B — findings table + hypothesis
+    # Layer B — cross-source FLAGS + grounded HYPOTHESIS
     _render_layer_b_panel(qa.layer_b)
 
     # Interpretation choices
@@ -243,19 +254,83 @@ def _render_review_panel(item: PipelineItem) -> None:
         )
 
 
+def _render_qa_summary(qa) -> None:  # type: ignore[no-untyped-def]
+    """One-line `FLAGS` vs `HYPOTHESIS` summary at the top of the QA section.
+
+    The case study explicitly asks the Quality Agent to *flag first, then
+    hypothesise where it can* — and to keep the two clearly distinguished.
+    This summary block lets the reviewer see, in one glance:
+      - Layer A flags: deterministic pass/fail count.
+      - Layer B flags: verdict + #findings + max |delta|.
+      - Hypothesis: confidence + one-line proposal, or 'null (no grounded basis)'.
+    """
+    layer_a_total = len(qa.layer_a.checks)
+    layer_a_failed = sum(1 for c in qa.layer_a.checks if c.result == "FAIL")
+
+    layer_b = qa.layer_b
+    if layer_b.cross_source_findings:
+        deltas = [
+            abs(f.delta_vs_primary)
+            for f in layer_b.cross_source_findings
+            if f.delta_vs_primary is not None
+        ]
+        max_delta = max(deltas) if deltas else None
+        b_summary = (
+            f"{layer_b.verdict} — {len(layer_b.cross_source_findings)} findings"
+            + (f" (max |Δ| {max_delta:.2f}%)" if max_delta is not None else "")
+        )
+    else:
+        b_summary = layer_b.verdict
+
+    hyp = layer_b.hypothesis
+    if hyp is not None:
+        conf_style = {"HIGH": "green", "MED": "yellow", "LOW": "red"}.get(
+            hyp.confidence, ""
+        )
+        hyp_text = Text(f"{hyp.confidence}", style=f"bold {conf_style}").append(
+            f" — {hyp.proposal}", style=""
+        )
+    elif layer_b.hypothesis_absence_note:
+        hyp_text = Text("null — no grounded basis", style="dim italic")
+    else:
+        hyp_text = Text("(none)", style="dim")
+
+    summary_table = Table(show_header=False, expand=True, box=None)
+    summary_table.add_column("Kind", style="bold", no_wrap=True)
+    summary_table.add_column("Detail", overflow="fold")
+    summary_table.add_row(
+        Text("FLAGS (what we know)", style="bold red"),
+        Text(
+            f"Layer A {layer_a_total - layer_a_failed}/{layer_a_total} pass"
+            f"  |  Layer B {b_summary}"
+        ),
+    )
+    summary_table.add_row(
+        Text("HYPOTHESIS (what we suspect)", style="bold magenta"),
+        hyp_text,
+    )
+    console.print(
+        Panel(
+            summary_table,
+            title="QA Summary — flag first, hypothesise where grounded",
+            border_style="bright_yellow",
+        )
+    )
+
+
 def _render_layer_b_panel(layer_b: LayerBReport) -> None:
     if not layer_b.cross_source_findings and layer_b.verdict == "NOT_APPLICABLE":
         console.print(
             Panel(
                 Text(layer_b.hypothesis_absence_note or "Layer B not applicable."),
-                title=f"Layer B — verdict: {layer_b.verdict}",
+                title=f"Layer B — FLAGS: {layer_b.verdict} (cross-source reconciliation)",
                 border_style="dim",
             )
         )
         return
 
     table = Table(
-        title=f"Layer B — verdict: {layer_b.verdict}",
+        title=f"Layer B — FLAGS: {layer_b.verdict} (cross-source reconciliation)",
         show_lines=False,
         expand=True,
     )
@@ -282,7 +357,7 @@ def _render_layer_b_panel(layer_b: LayerBReport) -> None:
         console.print(
             Panel(
                 Text(layer_b.hypothesis_absence_note, style="dim italic"),
-                title="Hypothesis",
+                title="HYPOTHESIS (LLM, evidence-grounded) — null: no grounded basis",
                 border_style="dim",
             )
         )
@@ -305,7 +380,13 @@ def _render_hypothesis(h: Hypothesis) -> None:
             h.what_this_does_not_explain
         )
     )
-    console.print(Panel(Group(*lines), title="Hypothesis", border_style="green"))
+    console.print(
+        Panel(
+            Group(*lines),
+            title="HYPOTHESIS (LLM-suspected, evidence-grounded)",
+            border_style="green",
+        )
+    )
 
 
 def _render_system_error_panel_and_decide(item: PipelineItem) -> ReviewDecision:
@@ -575,9 +656,67 @@ def _render_derivation_panel(trace: DerivationTrace) -> None:
         )
 
     console.print(table)
+
+    # Structured why_chosen panel — key:value layout instead of a wall of
+    # italic prose. Same information as `trace.rendered_why_chosen` but
+    # scannable in <5 seconds (R9 UX polish).
+    chosen_candidate = next(
+        (c for c in trace.candidate_sources if c.selected), None
+    )
+    rejected = [c for c in trace.candidate_sources if not c.selected]
+    why_table = Table(show_header=False, expand=True, box=None)
+    why_table.add_column("Field", style="bold cyan", no_wrap=True)
+    why_table.add_column("Value", overflow="fold")
+    why_table.add_row(
+        "Required grain",
+        "(" + ", ".join(trace.required_grain.dimensions) + ")"
+        if trace.required_grain.dimensions
+        else "(no grain — single-row)",
+    )
+    why_table.add_row(
+        "Scope predicates",
+        "; ".join(trace.scope_predicates) if trace.scope_predicates else "(none)",
+    )
+    why_table.add_row(
+        "Chosen source",
+        Text(trace.chosen_source, style="bold green"),
+    )
+    if chosen_candidate is not None:
+        grain_match_style = {
+            "exact": "green",
+            "rollup_needed": "yellow",
+            "too_coarse": "red",
+            "incompatible": "red",
+        }.get(chosen_candidate.grain_match, "")
+        why_table.add_row(
+            "  grain match",
+            Text(chosen_candidate.grain_match, style=grain_match_style),
+        )
+        feasibility_lines = []
+        for predicate, value in chosen_candidate.scope_feasibility.items():
+            mark = "✓" if value.startswith("feasible_via") else "✗"
+            feasibility_lines.append(f"{mark} {predicate}: {value}")
+        if feasibility_lines:
+            why_table.add_row(
+                "  scope feasibility",
+                "\n".join(feasibility_lines),
+            )
+    if rejected:
+        why_table.add_row(
+            "Rejected candidates",
+            "; ".join(f"{c.table} ({c.rejection_reason})" for c in rejected),
+        )
+    why_table.add_row(
+        "Aggregator",
+        f"{trace.chosen_aggregator} — {trace.aggregator_rationale}",
+    )
+    why_table.add_row(
+        "Filters",
+        "\n".join(trace.chosen_filters) if trace.chosen_filters else "(none)",
+    )
     console.print(
         Panel(
-            Text(trace.rendered_why_chosen, style="italic"),
+            why_table,
             title="why_chosen (planner-derived)",
             border_style="cyan",
         )

@@ -71,7 +71,7 @@ Per-category retry limit = 1 (tracked on `ReviewDecision.per_category_retry_coun
 - Tests under `tests/` — `pytest` runs without any API key (LLM calls use stub clients).
 - Local runtime files under `var/` (gitignored).
 - Committed sample artifacts under `outputs/sample/`.
-- Default model: `openai/gpt-4.1-mini` on OpenRouter, overrideable via `OPENROUTER_MODEL`.
+- Default model: `openai/gpt-4o-mini` on OpenRouter, overrideable via `OPENROUTER_MODEL`. See README §Model Choice for the evaluation that led to this default.
 - Mock fixtures in `tests/_fixtures/mock_llm/` (used by `PLUANG_LLM_MOCK=1` for interactive dev runs without an API key).
 - Cost log at `logs/cost.jsonl` (allow-listed in `.gitignore`).
 

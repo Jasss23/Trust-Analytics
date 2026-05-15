@@ -205,8 +205,11 @@ def test_derivation_panel_shows_all_candidates_with_match_status() -> None:
     assert "selected" in output
     # Rejection reason
     assert "monthly grain too coarse" in output
-    # rendered_why_chosen panel
-    assert "Picked fact_trading" in output
+    # why_chosen panel — structured key:value (replaces rendered_why_chosen narrative)
+    assert "why_chosen (planner-derived)" in output
+    assert "Required grain" in output
+    assert "Chosen source" in output
+    assert "Aggregator" in output
 
 
 # --- Pretty SQL ---
