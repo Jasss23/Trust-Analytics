@@ -641,10 +641,12 @@ def _render_derivation_panel(trace: DerivationTrace) -> None:
         }.get(c.grain_match, "")
         feasibility_lines = []
         for predicate, value in c.scope_feasibility.items():
-            mark = "✓" if value.startswith("feasible_via") else "✗"
+            mark = "ok  " if value.startswith("feasible_via") else "no  "
             feasibility_lines.append(f"{mark} {predicate}: {value}")
         feasibility_str = "\n".join(feasibility_lines) if feasibility_lines else "(none)"
-        selected_cell = Text("✓ selected", style="bold green") if c.selected else Text("✗", style="dim")
+        selected_cell = (
+            Text("selected", style="bold green") if c.selected else Text("-", style="dim")
+        )
         rejection = c.rejection_reason or ""
         table.add_row(
             c.table,
@@ -694,7 +696,7 @@ def _render_derivation_panel(trace: DerivationTrace) -> None:
         )
         feasibility_lines = []
         for predicate, value in chosen_candidate.scope_feasibility.items():
-            mark = "✓" if value.startswith("feasible_via") else "✗"
+            mark = "ok  " if value.startswith("feasible_via") else "no  "
             feasibility_lines.append(f"{mark} {predicate}: {value}")
         if feasibility_lines:
             why_table.add_row(

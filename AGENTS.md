@@ -30,7 +30,7 @@ The README describes the system; this file describes the engineering invariants 
 | Review | `review.py` | Rich-formatted interactive panel — Layer B findings table, full SQL with syntax highlighting, hypothesis panel, interpretation_choices, source provenance. Note coaching with category-specific defaults on rejection. Post-pipeline reinvestigation diff via `render_reinvestigation_diffs()`. |
 | LLM client | `llm.py` | OpenAI-compatible (OpenRouter target; OpenAI native works for dev). Typed errors, mock-mode (`PLUANG_LLM_MOCK=1`), cost log to `logs/cost.jsonl`. |
 | Metric registry | `metrics.yml` + `metrics.py` | Hand-curated entries with primary/alternatives/period/breakdown/aggregator/threshold/expected_min/max/notes_for_layer_b. WrenAI-MDL-inspired thin slice. |
-| Per-table warnings | `instructions.yml` + `metadata.py:load_instructions()` | Hand-curated YAML carrying `⚠️` warnings rendered into the schema context (Total-row, date format, status filter, canonical source). |
+| Per-table warnings | `instructions.yml` + `metadata.py:load_instructions()` | Hand-curated YAML carrying table warnings rendered into the schema context as `NOTE:` lines (Total-row, date format, status filter, canonical source). |
 | Schema context | `metadata.py:describe_schema_context()` | WrenAI-style `### Model: name — description` blocks with full dbt column descriptions inlined. |
 | Prompts | `prompts/*.md` | Process-driven, zero domain rule statements in the system prompt. |
 

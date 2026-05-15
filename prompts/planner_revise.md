@@ -7,7 +7,7 @@ The user message provides:
 - The previous `QuestionPlan` (JSON — the plan that produced the rejected answer)
 - A summary of the previous `SQLAgentAnswer` (chosen source, SQL, first few result rows)
 - The reviewer's rejection category (`answer_wrong` or `source_wrong`) and free-form note
-- The schema context (tables, columns, descriptions, ⚠️ warnings)
+- The schema context (tables, columns, descriptions, NOTE warnings)
 - The metric registry entry for the question, when one exists
 
 ---

@@ -1,0 +1,10 @@
+Review mode: demo-approve
+Terminal summary: {'approved': 1}
+
+Question: adhoc_ask_demo
+Decision: approve
+Retry budget: used 0/2 (remaining 2)
+Attempts: ['success']
+Terminal state: approved
+Trust profile: YELLOW (correctness=GREEN source=YELLOW ambiguity=GREEN)
+QA summary: Layer A clean. Layer B: No metrics.yml entry for adhoc_ask_demo.

@@ -3,7 +3,7 @@
 # This file is hand-curated by the data team. Each warning describes a quirk
 # the SQL Agent must be aware of when querying that table — e.g. column-format
 # gotchas, hidden filter semantics, known stale data. Warnings are surfaced
-# as ⚠️ blocks in describe_schema_context() output.
+# as `NOTE: ...` lines in describe_schema_context() output.
 #
 # In production this would be merged with dbt YAML descriptions (or replaced
 # by dbt Semantic Layer / WrenAI MDL `_instructions`). Here it's a simple

@@ -17,29 +17,29 @@
 │ Answer shape     │ breakdown                                                                                                             │
 └──────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                                                      Derivation — candidates considered                                                     
-┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Table                   ┃ Grain                     ┃ Match         ┃ Scope feasibility         ┃  Selected  ┃ Rejection reason          ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ fct_trading_daily       │ (transaction_date,        │ exact         │ ✓ October 2025:           │ ✓ selected │                           │
-│                         │ asset_class)              │               │ feasible_via=transaction_ │            │                           │
-│                         │                           │               │ date >= '2025-10-01' AND  │            │                           │
-│                         │                           │               │ transaction_date <        │            │                           │
-│                         │                           │               │ '2025-11-01'              │            │                           │
-│ agg_monthly_biz_summary │ (month, asset_class)      │ rollup_needed │ ✓ October 2025:           │     ✗      │ Grain rollup needed;      │
-│                         │                           │               │ feasible_via=month >=     │            │ requires aggregation by   │
-│                         │                           │               │ '2025-10-01' AND month <  │            │ transaction_date.         │
-│                         │                           │               │ '2025-11-01'              │            │                           │
-│ mart_ops_dashboard      │ (month, asset_class)      │ rollup_needed │ ✓ October 2025:           │     ✗      │ Grain rollup needed;      │
-│                         │                           │               │ feasible_via=month >=     │            │ requires aggregation by   │
-│                         │                           │               │ '2025-10-01' AND month <  │            │ transaction_date.         │
-│                         │                           │               │ '2025-11-01'              │            │                           │
-└─────────────────────────┴───────────────────────────┴───────────────┴───────────────────────────┴────────────┴───────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Table                   ┃ Grain                      ┃ Match         ┃ Scope feasibility         ┃ Selected ┃ Rejection reason           ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ fct_trading_daily       │ (transaction_date,         │ exact         │ ok   October 2025:        │ selected │                            │
+│                         │ asset_class)               │               │ feasible_via=transaction_ │          │                            │
+│                         │                            │               │ date >= '2025-10-01' AND  │          │                            │
+│                         │                            │               │ transaction_date <        │          │                            │
+│                         │                            │               │ '2025-11-01'              │          │                            │
+│ agg_monthly_biz_summary │ (month, asset_class)       │ rollup_needed │ ok   October 2025:        │    -     │ Grain rollup needed;       │
+│                         │                            │               │ feasible_via=month >=     │          │ requires aggregation by    │
+│                         │                            │               │ '2025-10-01' AND month <  │          │ transaction_date.          │
+│                         │                            │               │ '2025-11-01'              │          │                            │
+│ mart_ops_dashboard      │ (month, asset_class)       │ rollup_needed │ ok   October 2025:        │    -     │ Grain rollup needed;       │
+│                         │                            │               │ feasible_via=month >=     │          │ requires aggregation by    │
+│                         │                            │               │ '2025-10-01' AND month <  │          │ transaction_date.          │
+│                         │                            │               │ '2025-11-01'              │          │                            │
+└─────────────────────────┴────────────────────────────┴───────────────┴───────────────────────────┴──────────┴────────────────────────────┘
 ╭────────────────────────────────────────────────────── why_chosen (planner-derived) ──────────────────────────────────────────────────────╮
 │  Required grain       (transaction_date, asset_class)                                                                                    │
 │  Scope predicates     October 2025                                                                                                       │
 │  Chosen source        fct_trading_daily                                                                                                  │
 │    grain match        exact                                                                                                              │
-│    scope feasibility  ✓ October 2025: feasible_via=transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'                  │
+│    scope feasibility  ok   October 2025: feasible_via=transaction_date >= '2025-10-01' AND transaction_date < '2025-11-01'               │
 │  Rejected candidates  agg_monthly_biz_summary (Grain rollup needed; requires aggregation by transaction_date.); mart_ops_dashboard       │
 │                       (Grain rollup needed; requires aggregation by transaction_date.)                                                   │
 │  Aggregator           SUM — SUM because gtv_idr is per-(transaction_date, asset_class) row, summable across days.                        │

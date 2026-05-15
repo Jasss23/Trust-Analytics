@@ -122,7 +122,7 @@ def _render_table(
         lines.append(f"  {desc}")
 
     for w in instructions.get(name, []):
-        lines.append(f"  ⚠️  {w}")
+        lines.append(f"  NOTE: {w}")
 
     cols = table.get("columns", [])
     if cols:
@@ -158,7 +158,7 @@ def _render_model(
         lines.append(f"  Description: {desc}")
 
     for w in instructions.get(name, []):
-        lines.append(f"  ⚠️  {w}")
+        lines.append(f"  NOTE: {w}")
 
     cols = model.get("columns", [])
     if cols:

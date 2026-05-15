@@ -14,7 +14,7 @@ Variables (replaced in Python before sending):
 
 ---
 
-## Schema context (tables, columns, descriptions, ⚠️ warnings)
+## Schema context (tables, columns, descriptions, NOTE warnings)
 
 {schema_context}
 
@@ -50,4 +50,4 @@ Period: {question_period}
 
 ## Instructions
 
-Follow the Process from the system prompt: identify the registry entry above, use its primary source by default, apply its extra_filters, comply with the ⚠️ warnings on your chosen table, and surface ambiguity via interpretation_choices when applicable. If a `## Correction` block is present, address its specific failure detail rather than re-emitting the previous SQL. Return ONLY the JSON object — no explanation before or after.
+Follow the Process from the system prompt: identify the registry entry above, use its primary source by default, apply its extra_filters, comply with the NOTE warnings on your chosen table, and surface ambiguity via interpretation_choices when applicable. If a `## Correction` block is present, address its specific failure detail rather than re-emitting the previous SQL. Return ONLY the JSON object — no explanation before or after.

@@ -1,0 +1,75 @@
+[
+  {
+    "layer_a": {
+      "checks": [
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "non_empty_result",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "no_required_nulls",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "no_negative_for_always_positive",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "no_zero_for_must_be_positive",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "required_columns_present",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "no_aggregate_member_in_breakdown",
+          "result": "NOT_APPLICABLE"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "metric_value_matches_result_rows",
+          "result": "PASS"
+        },
+        {
+          "detail": null,
+          "evidence": [],
+          "name": "source_matches_validated_plan",
+          "result": "PASS"
+        }
+      ]
+    },
+    "layer_b": {
+      "cross_source_findings": [],
+      "hypothesis": null,
+      "hypothesis_absence_note": "No metrics.yml entry for adhoc_ask_demo.",
+      "verdict": "NOT_APPLICABLE"
+    },
+    "layer_c": {
+      "trust_profile": {
+        "dimensions": {
+          "ambiguity": "GREEN",
+          "correctness": "GREEN",
+          "source_reliability": "YELLOW"
+        },
+        "overall": "YELLOW",
+        "reviewer_summary": "Layer A clean. Layer B: No metrics.yml entry for adhoc_ask_demo."
+      },
+      "unresolved_questions": []
+    },
+    "question_id": "adhoc_ask_demo"
+  }
+]

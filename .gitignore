@@ -11,6 +11,7 @@ outputs/ask/
 *.db
 *.log
 !outputs/sample/*.log
+!outputs/sample/**/*.log
 logs/
 !logs/cost.jsonl
 *.egg-info/

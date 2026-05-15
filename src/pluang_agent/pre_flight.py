@@ -420,7 +420,7 @@ def _check_all_null_primary(
                         f"column). Likely causes: a filter excluded all populated rows "
                         f"(e.g. asset_class filter on a column populated only on the "
                         f"Total row), or you queried the wrong table. Re-check the "
-                        f"⚠️ warnings on the chosen table."
+                        f"NOTE warnings on the chosen table."
                     ),
                 )
         return None
@@ -503,7 +503,7 @@ def _check_plausible_range(
                         f"Row {idx}.{key} = {f}, above expected_max "
                         f"({entry.expected_max}). Likely cause: double counting "
                         f"(e.g. including a Total row alongside per-asset rows) or "
-                        f"wrong source. Re-check ⚠️ warnings."
+                        f"wrong source. Re-check NOTE warnings on the chosen table."
                     ),
                 )
     return None
