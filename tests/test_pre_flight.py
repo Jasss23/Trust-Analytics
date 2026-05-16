@@ -6,9 +6,9 @@ FAILs only when there's a definitely-wrong condition.
 
 from __future__ import annotations
 
-from pluang_agent.metrics import MetricEntry, MetricsRegistry, SourceSpec
-from pluang_agent.models import BusinessQuestion, SourceProvenance, SQLAgentAnswer
-from pluang_agent.pre_flight import pre_flight_check
+from trust_analytics.metrics import MetricEntry, MetricsRegistry, SourceSpec
+from trust_analytics.models import BusinessQuestion, SourceProvenance, SQLAgentAnswer
+from trust_analytics.pre_flight import pre_flight_check
 
 
 def _question() -> BusinessQuestion:
@@ -134,7 +134,7 @@ def test_bypasses_when_system_error_set() -> None:
     """System-errored answers should not be re-checked — the workflow
     already routes them."""
     answer = _answer([])
-    from pluang_agent.models import SystemError as _SystemError
+    from trust_analytics.models import SystemError as _SystemError
 
     answer.system_error = _SystemError(
         error_class="quota",
@@ -152,7 +152,7 @@ def test_bypasses_when_system_error_set() -> None:
 # ===========================================================================
 
 
-from pluang_agent.models import (  # noqa: E402
+from trust_analytics.models import (  # noqa: E402
     AnswerShape,
     CandidateSource,
     DerivationTrace,

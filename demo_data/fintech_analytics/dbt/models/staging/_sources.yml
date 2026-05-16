@@ -1,0 +1,136 @@
+version: 2
+
+sources:
+
+  - name: production_db
+    description: >
+      Core production database synced from the the fintech application backend.
+      Managed by Data Engineering. Refreshed hourly.
+    schema: production
+
+    tables:
+
+      - name: raw_transactions
+        description: >
+          All user transactions across every asset class.
+          One row per transaction. Contains the full transaction
+          lifecycle — completed, pending, and failed records are
+          all present.
+          Grain: one row per transaction_id.
+
+        columns:
+          - name: transaction_id
+            description: "Unique identifier for the transaction. Format: TX followed by 7 digits."
+
+          - name: user_id
+            description: "Identifier of the user who initiated the transaction."
+
+          - name: transaction_date
+            description: "Date the transaction was initiated."
+
+          - name: asset_class
+            description: "Asset class of the transaction. Values: crypto, gold, gss, fx, options."
+
+          - name: transaction_type
+            description: "Type of transaction. Values: buy, sell, deposit, withdrawal."
+
+          - name: status
+            description: "Transaction status. Values: completed, pending, failed."
+
+          - name: amount_usd
+            description: >
+              Transaction value in USD, recorded at the time of the transaction.
+              This is not derived from amount_idr — it is the USD equivalent
+              captured directly at execution.
+
+          - name: amount_idr
+            description: "Transaction value in Indonesian Rupiah (IDR)."
+
+          - name: fee_idr
+            description: "Transaction fee charged to the user, in IDR."
+
+
+      - name: dim_users
+        description: >
+          User master data. One row per registered user.
+          Contains registration metadata and acquisition attribution.
+          Grain: one row per user_id.
+
+        columns:
+          - name: user_id
+            description: "Unique identifier for the user."
+
+          - name: signup_date
+            description: "Date the user registered on the the fintech platform."
+
+          - name: first_asset_class
+            description: >
+              The first asset class the user transacted in.
+              NULL if the user has not yet transacted.
+              Values: crypto, gold, gss, mfund.
+
+          - name: acquisition_channel
+            description: >
+              Marketing or referral channel through which the user was acquired.
+              Values: Organic, Paid Ads, Referral, Social Media, Influencers,
+              Direct Content, Partnerships, Investment Club, B2B, AEO, Others.
+
+
+      - name: aum_monthly_snapshot
+        description: >
+          End-of-month snapshot of Assets Under Management per user.
+          One row per user per month. Only users with holdings at month-end
+          are included — users with zero AUM do not appear in this table.
+          Grain: one row per user_id and month.
+
+        columns:
+          - name: user_id
+            description: "Identifier of the user."
+
+          - name: month
+            description: "First day of the month being snapshotted."
+
+          - name: aum_usd
+            description: "Total Assets Under Management for the user at month-end, in USD."
+
+          - name: aum_idr
+            description: "Total Assets Under Management for the user at month-end, in IDR."
+
+
+  - name: product_analytics
+    description: >
+      Frontend event stream from the the fintech app, captured via the client analytics SDK
+      and integrated into product analytics. Managed by the Firebase BigQuery integration.
+      Refreshed hourly. Events are client-side — delivery is not guaranteed
+      and the event stream may under-represent actual user activity.
+    schema: staging
+
+    tables:
+
+      - name: stg_mixpanel_events
+        description: >
+          Staging table of product analytics events fired by users in the the fintech app.
+          One row per event. Contains trade events, price alert events,
+          and wallet top-up events.
+          Client-side event delivery is not guaranteed — this table should
+          not be used as the sole source of truth for transaction volumes
+          or user counts.
+          Grain: one row per user_id, event_timestamp, and mixpanel_event.
+
+        columns:
+          - name: user_id
+            description: "Identifier of the user who triggered the event."
+
+          - name: event_timestamp
+            description: "Timestamp when the event was fired on the client."
+
+          - name: asset_class
+            description: "Asset class associated with the event. Values: crypto, gold, gss, fx, options."
+
+          - name: feature_name
+            description: "Feature area in the app where the event was triggered. Values: trade, wallet_topup, set_price_alert."
+
+          - name: mixpanel_event
+            description: >
+              Event name as defined in product analytics.
+              Values: trade_executed, topup_success, create_alert_success.

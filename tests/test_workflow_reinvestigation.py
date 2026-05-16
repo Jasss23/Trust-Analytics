@@ -18,18 +18,18 @@ from pathlib import Path
 
 import pytest
 
-from pluang_agent.agents.quality_agent import QualityAgent
-from pluang_agent.agents.sql_agent import SQLAgent
-from pluang_agent.llm import LLMResponse
-from pluang_agent.metadata import DbtMetadata
-from pluang_agent.metrics import MetricsRegistry
-from pluang_agent.models import (
+from trust_analytics.agents.quality_agent import QualityAgent
+from trust_analytics.agents.sql_agent import SQLAgent
+from trust_analytics.llm import LLMResponse
+from trust_analytics.metadata import DbtMetadata
+from trust_analytics.metrics import MetricsRegistry
+from trust_analytics.models import (
     BusinessQuestion,
     ReviewMode,
     TerminalState,
     UsageRecord,
 )
-from pluang_agent.workflow import run_pipeline
+from trust_analytics.workflow import run_pipeline
 
 # ---------------------------------------------------------------------------
 # Fixtures: real DB + synthetic metadata
@@ -207,8 +207,8 @@ def _qa_layer_c_payload() -> str:
 @pytest.fixture()
 def patch_review(monkeypatch: pytest.MonkeyPatch):
     """Override the human review step to inject a scripted decision."""
-    from pluang_agent import workflow as wf
-    from pluang_agent.models import ReviewCategory, ReviewDecision
+    from trust_analytics import workflow as wf
+    from trust_analytics.models import ReviewCategory, ReviewDecision
 
     state: dict[str, object] = {}
 
@@ -246,7 +246,7 @@ def test_reinvestigation_revises_plan_for_count_not_sum(
     4. SQL Agent writes COUNT, pre-flight passes
     5. Terminal = reinvestigated, NOT audit_required
     """
-    from pluang_agent.models import ReviewCategory
+    from trust_analytics.models import ReviewCategory
 
     stub = _Stub()
     # Phase 1 (initial planning): trace for SUM(gtv_idr)
@@ -323,7 +323,7 @@ def test_reinvestigation_unchanged_plan_via_revision_note(
     """INVERSE: reviewer note about a SQL typo (not a plan issue). LLM
     emits plan unchanged + revision_note. Workflow re-runs SQL Agent
     against the same plan; pre-flight passes; terminal = reinvestigated."""
-    from pluang_agent.models import ReviewCategory
+    from trust_analytics.models import ReviewCategory
 
     stub = _Stub()
     # Phase 1
@@ -394,7 +394,7 @@ def test_reinvestigation_invalid_revision_routes_to_audit(
     """If the LLM emits a revised plan that fails validation (hallucinated
     table), the workflow routes to audit_required with
     audit_reason='plan_revision_failed'."""
-    from pluang_agent.models import ReviewCategory
+    from trust_analytics.models import ReviewCategory
 
     stub = _Stub()
     stub.queue("planner_trace:", _trace_payload())

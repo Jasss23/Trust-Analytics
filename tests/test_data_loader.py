@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from pluang_agent.data_loader import REQUIRED_CSVS, DataLoadError, load_csvs
-from pluang_agent.db import connect, table_count
+from trust_analytics.data_loader import REQUIRED_CSVS, DataLoadError, load_csvs
+from trust_analytics.db import connect, table_count
 
 
 def test_load_csvs_is_idempotent(tmp_path: Path) -> None:
@@ -15,7 +15,7 @@ def test_load_csvs_is_idempotent(tmp_path: Path) -> None:
     for csv_name in REQUIRED_CSVS:
         _write_csv(data_dir / csv_name, [{"id": "1"}, {"id": "2"}])
 
-    db_path = tmp_path / "nested" / "pluang.sqlite"
+    db_path = tmp_path / "nested" / "trust_analytics.sqlite"
     first = load_csvs(data_dir, db_path)
     second = load_csvs(data_dir, db_path)
 
@@ -27,7 +27,7 @@ def test_load_csvs_is_idempotent(tmp_path: Path) -> None:
 
 def test_load_csvs_reports_missing_files(tmp_path: Path) -> None:
     with pytest.raises(DataLoadError, match="Missing required CSV"):
-        load_csvs(tmp_path, tmp_path / "pluang.sqlite")
+        load_csvs(tmp_path, tmp_path / "trust_analytics.sqlite")
 
 
 def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:

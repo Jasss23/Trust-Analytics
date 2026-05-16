@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from pluang_agent.agents.sql_agent import SQLAgent
-from pluang_agent.llm import LLMOutputError, LLMQuotaError, LLMResponse
-from pluang_agent.metadata import DbtMetadata
-from pluang_agent.metrics import MetricEntry, MetricsRegistry, SourceSpec
-from pluang_agent.models import BusinessQuestion, UsageRecord
-from pluang_agent.sql_attempt import (
+from trust_analytics.agents.sql_agent import SQLAgent
+from trust_analytics.llm import LLMOutputError, LLMQuotaError, LLMResponse
+from trust_analytics.metadata import DbtMetadata
+from trust_analytics.metrics import MetricEntry, MetricsRegistry, SourceSpec
+from trust_analytics.models import BusinessQuestion, UsageRecord
+from trust_analytics.sql_attempt import (
     is_retry_eligible,
     mark_budget_exhausted,
     run_one_attempt,

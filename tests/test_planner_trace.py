@@ -11,8 +11,8 @@ trigger that fails AND an inverse scenario that passes.
 
 from __future__ import annotations
 
-from pluang_agent.metadata import DbtMetadata
-from pluang_agent.models import (
+from trust_analytics.metadata import DbtMetadata
+from trust_analytics.models import (
     CandidateSource,
     DerivationTrace,
     GrainSpec,
@@ -20,7 +20,7 @@ from pluang_agent.models import (
     PlanSource,
     QuestionPlan,
 )
-from pluang_agent.planner import (
+from trust_analytics.planner import (
     apply_trace_to_answer,
     render_why_chosen,
     validate_derivation_trace,
@@ -424,7 +424,7 @@ def test_render_why_chosen_substantive() -> None:
 # --- apply_trace_to_answer overwrites source + why_chosen ---
 
 def test_apply_trace_overwrites_boilerplate_why_chosen() -> None:
-    from pluang_agent.models import SourceProvenance, SQLAgentAnswer
+    from trust_analytics.models import SourceProvenance, SQLAgentAnswer
 
     answer = SQLAgentAnswer(
         question_id="q",

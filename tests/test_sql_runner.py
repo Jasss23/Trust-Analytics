@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from pluang_agent.sql_runner import SQLSafetyError, execute_read_only, validate_read_only_sql
+from trust_analytics.sql_runner import SQLSafetyError, execute_read_only, validate_read_only_sql
 
 
 def test_read_only_select_executes(tmp_path: Path) -> None:

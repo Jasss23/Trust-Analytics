@@ -11,18 +11,18 @@ from pathlib import Path
 
 import pytest
 
-from pluang_agent.data_loader import load_csvs
-from pluang_agent.questions import get_question
 from tests._fixtures.golden_sql import golden_answer
+from trust_analytics.data_loader import load_csvs
+from trust_analytics.questions import get_question
 
-CASE_DATA_DIR = Path("/Users/jiashunpang/projects/ai/pluang/docs/pluang_analytics_agent/data")
+CASE_DATA_DIR = Path("demo_data/fintech_analytics/data")
 
 
 @pytest.fixture()
 def real_db(tmp_path: Path) -> Path:
     if not CASE_DATA_DIR.exists():
         pytest.skip("Case study CSVs are not available locally.")
-    db_path = tmp_path / "pluang.sqlite"
+    db_path = tmp_path / "trust_analytics.sqlite"
     load_csvs(CASE_DATA_DIR, db_path)
     return db_path
 

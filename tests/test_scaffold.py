@@ -9,21 +9,20 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_project_script_entrypoint_is_registered() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
 
-    assert pyproject["project"]["scripts"]["pluang-agent"] == "pluang_agent.cli:app"
+    assert pyproject["project"]["scripts"]["trust-analytics"] == "trust_analytics.cli:app"
 
 
 def test_required_readme_sections_exist() -> None:
     readme = (ROOT / "README.md").read_text()
 
     for heading in [
-        "## Architecture",
-        "## Context and Prompt Strategy",
-        "## Model Choice",
-        "## How to Run",
-        "## Scaling",
-        "## Testing",
-        "## Cost",
-        "## Limitations",
+        "## What The Demo Shows",
+        "## Run Locally",
+        "## CLI",
+        "## Environment",
+        "## API",
+        "## Test",
+        "## Deploy",
     ]:
         assert heading in readme
 

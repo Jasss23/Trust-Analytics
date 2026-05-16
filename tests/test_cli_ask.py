@@ -1,7 +1,7 @@
-"""CLI `pluang-agent ask` tests (R7).
+"""CLI `trust-analytics ask` tests (R7).
 
 Uses typer's CliRunner with a stub LLM client injected via monkey-patch on
-`pluang_agent.llm.make_client`. We don't rely on the fixture-based mock
+`trust_analytics.llm.make_client`. We don't rely on the fixture-based mock
 client because ad-hoc questions get synthesised ids that won't match any
 fixture filename — so we provide a programmatic stub instead.
 
@@ -18,10 +18,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from pluang_agent import cli as cli_module
-from pluang_agent import llm as llm_module
-from pluang_agent.llm import LLMResponse
-from pluang_agent.models import UsageRecord
+from trust_analytics import cli as cli_module
+from trust_analytics import llm as llm_module
+from trust_analytics.llm import LLMResponse
+from trust_analytics.models import UsageRecord
 
 runner = CliRunner()
 
@@ -186,7 +186,7 @@ def patch_llm_and_metadata(monkeypatch: pytest.MonkeyPatch, real_db: Path):
 
     Yields the stub LLM client so tests can inspect call history.
     """
-    from pluang_agent.metadata import DbtMetadata
+    from trust_analytics.metadata import DbtMetadata
 
     stub = _ScriptedStub()
 
@@ -214,15 +214,15 @@ def patch_llm_and_metadata(monkeypatch: pytest.MonkeyPatch, real_db: Path):
 
     monkeypatch.setattr(llm_module, "make_client", _fake_make_client)
     monkeypatch.setattr(
-        "pluang_agent.cli.load_settings",
+        "trust_analytics.cli.load_settings",
         lambda: _fake_settings(real_db),
     )
     monkeypatch.setattr(
-        "pluang_agent.metadata.load_dbt_metadata",
+        "trust_analytics.metadata.load_dbt_metadata",
         _fake_load_metadata,
     )
     monkeypatch.setattr(
-        "pluang_agent.metadata.case_root_from_data_dir",
+        "trust_analytics.metadata.case_root_from_data_dir",
         lambda _d: Path("/tmp/fake_case_root"),
     )
 
@@ -237,9 +237,8 @@ def _fake_settings(db_path: Path):
     s = _S()
     s.db_path = db_path
     s.data_dir = db_path.parent
-    s.openrouter_api_key = "fake-key"
-    s.openrouter_base_url = "https://api.openai.com/v1"
-    s.openrouter_model = "gpt-4o-mini"
+    s.openai_api_key = "fake-key"
+    s.openai_model = "gpt-4o-mini"
     return s
 
 
@@ -251,7 +250,7 @@ def _fake_settings(db_path: Path):
 def test_ask_happy_path_writes_four_files(
     patch_llm_and_metadata, tmp_path: Path
 ) -> None:
-    """`pluang-agent ask "..." --no-review` writes the expected files and
+    """`trust-analytics ask "..." --no-review` writes the expected files and
     exits 0 on success."""
     out = tmp_path / "ask_out"
     result = runner.invoke(
@@ -315,17 +314,17 @@ def test_ask_planner_failure_exits_nonzero(
     """When the trace validator rejects the LLM-proposed trace, the
     question routes to AUDIT_REQUIRED and the CLI exits non-zero with a
     clear failure message."""
-    from pluang_agent.metadata import DbtMetadata
+    from trust_analytics.metadata import DbtMetadata
 
     stub = _PlannerTraceFailureStub()
     monkeypatch.setattr(llm_module, "make_client", lambda _s: stub)
-    monkeypatch.setattr("pluang_agent.cli.load_settings", lambda: _fake_settings(real_db))
+    monkeypatch.setattr("trust_analytics.cli.load_settings", lambda: _fake_settings(real_db))
     monkeypatch.setattr(
-        "pluang_agent.metadata.load_dbt_metadata",
+        "trust_analytics.metadata.load_dbt_metadata",
         lambda _r: DbtMetadata(sources={}, models={"models": [{"name": "fct_trading_daily", "columns": []}]}),
     )
     monkeypatch.setattr(
-        "pluang_agent.metadata.case_root_from_data_dir",
+        "trust_analytics.metadata.case_root_from_data_dir",
         lambda _d: Path("/tmp/fake_case_root"),
     )
 

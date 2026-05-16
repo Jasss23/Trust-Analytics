@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from pluang_agent.questions import (
+from trust_analytics.questions import (
     _slugify,
     _synthesise_id,
     synthesize_business_question,

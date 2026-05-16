@@ -11,19 +11,19 @@ from pathlib import Path
 
 import pytest
 
-from pluang_agent.agents.quality_agent import QualityAgent
-from pluang_agent.agents.sql_agent import SQLAgent
-from pluang_agent.llm import (
+from trust_analytics.agents.quality_agent import QualityAgent
+from trust_analytics.agents.sql_agent import SQLAgent
+from trust_analytics.llm import (
     LLMAuthError,
     LLMOutputError,
     LLMQuotaError,
     LLMResponse,
     LLMTransientError,
 )
-from pluang_agent.metadata import DbtMetadata
-from pluang_agent.models import ReviewMode, TerminalState, UsageRecord
-from pluang_agent.questions import get_question
-from pluang_agent.workflow import run_pipeline
+from trust_analytics.metadata import DbtMetadata
+from trust_analytics.models import ReviewMode, TerminalState, UsageRecord
+from trust_analytics.questions import get_question
+from trust_analytics.workflow import run_pipeline
 
 
 @pytest.fixture()

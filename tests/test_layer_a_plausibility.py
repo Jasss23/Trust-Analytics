@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pluang_agent.metrics import MetricEntry, SourceSpec
-from pluang_agent.models import SourceProvenance, SQLAgentAnswer
-from pluang_agent.quality_rules import run_layer_a
+from trust_analytics.metrics import MetricEntry, SourceSpec
+from trust_analytics.models import SourceProvenance, SQLAgentAnswer
+from trust_analytics.quality_rules import run_layer_a
 
 
 def _entry(expected_min: float | None, expected_max: float | None) -> MetricEntry:

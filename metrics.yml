@@ -1,4 +1,4 @@
-# Metric registry — hand-curated for the take-home prototype.
+# Metric registry — hand-curated for the product demo prototype.
 #
 # In production this would be sourced from dbt Semantic Layer / MetricFlow /
 # Cube / WrenAI MDL. Here it is hand-curated. Each entry powers:

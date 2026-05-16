@@ -1,0 +1,132 @@
+version: 2
+
+models:
+
+  - name: fct_trading_daily
+    description: >
+      Daily trading summary aggregated from raw_transactions.
+      Contains one row per transaction_date and asset_class combination.
+      Built and maintained by the data team via dbt and Airflow.
+    meta:
+      owner: data_team
+      managed_by: dbt + Airflow
+      source_tables:
+        - raw_transactions
+
+    columns:
+      - name: transaction_date
+        description: "Calendar date of the transactions being summarised."
+
+      - name: asset_class
+        description: "Asset class traded. Values: crypto, gold, gss, fx, options."
+
+      - name: gtv_idr
+        description: >
+          Gross Transaction Value in Indonesian Rupiah (IDR).
+          Defined as the sum of amount_idr across all completed transactions
+          for the given date and asset class.
+          Only completed transactions are included. Pending, failed, and
+          cancelled transactions are excluded.
+
+      - name: gtv_usd
+        description: >
+          Gross Transaction Value in USD.
+          Defined as the sum of amount_usd across all completed transactions
+          for the given date and asset class.
+          amount_usd is the USD equivalent recorded at the time of each
+          transaction. This is not a conversion from IDR — it is sourced
+          directly from the transaction record.
+          Only completed transactions are included.
+
+      - name: implied_fx_rate
+        description: >
+          Implied IDR/USD exchange rate for the day, calculated as
+          SUM(amount_idr) / SUM(amount_usd). Rounded to 1 decimal place.
+          Provided for reference only — do not use this to convert between
+          IDR and USD figures.
+
+      - name: transaction_count
+        description: >
+          Total number of completed transactions for the given date and
+          asset class. Pending, failed, and cancelled transactions are
+          excluded.
+
+      - name: unique_traders
+        description: >
+          Count of distinct user_ids with at least one completed transaction
+          on the given date and asset class.
+
+
+  - name: agg_monthly_biz_summary
+    description: >
+      Monthly business KPI summary used in the RevOps dashboard.
+      Contains one row per month and asset_class, plus a Total row per month
+      that aggregates across all asset classes.
+      Managed by BigQuery Scheduled Query. Not managed in dbt.
+    meta:
+      owner: data_team
+      managed_by: BigQuery Scheduled Query
+      source_tables:
+        - fct_trading_daily
+        - aum_monthly_snapshot
+
+    columns:
+      - name: month
+        description: "First day of the calendar month being reported."
+
+      - name: asset_class
+        description: >
+          Asset class. Values: crypto, gold, gss, fx, options, Total.
+          The Total row aggregates GTV and transaction_count across all
+          asset classes for the month. MTU is only populated on the
+          Total row.
+
+      - name: gtv_idr
+        description: "Gross Transaction Value in IDR for the month and asset class."
+
+      - name: gtv_usd
+        description: "Gross Transaction Value in USD for the month and asset class."
+
+      - name: transaction_count
+        description: "Total number of transactions for the month and asset class."
+
+      - name: mtu
+        description: >
+          Monthly Transacting Users. Populated only on the Total row
+          for each month. NULL for individual asset class rows.
+
+
+  - name: mart_ops_dashboard
+    description: >
+      Monthly summary used by the Ops team for operational reporting.
+      Contains one row per month and asset_class, plus a Total row per month.
+      Managed by the Ops team outside of dbt.
+    meta:
+      owner: ops_team
+      managed_by: Ops team SQL (not in dbt)
+      source_tables:
+        - raw_transactions
+        - stg_mixpanel_events
+
+    columns:
+      - name: month
+        description: "First day of the calendar month being reported."
+
+      - name: asset_class
+        description: >
+          Asset class. Values: crypto, gold, gss, fx, options, Total.
+          The Total row aggregates all asset classes for the month.
+
+      - name: total_transactions
+        description: "Total number of transactions for the month and asset class."
+
+      - name: gtv_idr
+        description: "Gross Transaction Value in IDR for the month and asset class."
+
+      - name: gtv_usd_reported
+        description: "Gross Transaction Value converted to USD for the month and asset class."
+
+      - name: mtu_mixpanel
+        description: >
+          Monthly Transacting Users for the month and asset class,
+          as measured via product analytics events.

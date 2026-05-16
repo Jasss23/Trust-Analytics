@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pluang_agent.llm import append_cost_log
-from pluang_agent.models import UsageRecord
+from trust_analytics.llm import append_cost_log
+from trust_analytics.models import UsageRecord
 
 
 def test_append_creates_log_and_appends(tmp_path: Path) -> None:

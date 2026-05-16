@@ -14,8 +14,8 @@ from io import StringIO
 
 from rich.console import Console
 
-from pluang_agent import review as review_mod
-from pluang_agent.models import (
+from trust_analytics import review as review_mod
+from trust_analytics.models import (
     BusinessQuestion,
     CandidateSource,
     DerivationTrace,
@@ -244,7 +244,7 @@ def test_pretty_sql_falls_back_on_parse_error() -> None:
 def test_starter_note_for_source_wrong_mentions_alternative() -> None:
     """When the answer has alternatives_available, the source_wrong starter
     note coaches the reviewer to suggest one."""
-    from pluang_agent.models import ReviewCategory
+    from trust_analytics.models import ReviewCategory
 
     item = _item_with_trace()
     starter = review_mod._starter_note_for_category(ReviewCategory.SOURCE_WRONG, item)
@@ -254,7 +254,7 @@ def test_starter_note_for_source_wrong_mentions_alternative() -> None:
 
 def test_starter_note_categories_all_return_non_empty() -> None:
     """Every rejection category returns a coaching string."""
-    from pluang_agent.models import ReviewCategory
+    from trust_analytics.models import ReviewCategory
 
     item = _item_with_trace()
     for cat in ReviewCategory:

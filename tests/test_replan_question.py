@@ -15,10 +15,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from pluang_agent.llm import LLMResponse
-from pluang_agent.metadata import DbtMetadata
-from pluang_agent.metrics import MetricsRegistry
-from pluang_agent.models import (
+from trust_analytics.llm import LLMResponse
+from trust_analytics.metadata import DbtMetadata
+from trust_analytics.metrics import MetricsRegistry
+from trust_analytics.models import (
     BusinessQuestion,
     PlanPeriod,
     PlanSource,
@@ -27,7 +27,7 @@ from pluang_agent.models import (
     SQLAgentAnswer,
     UsageRecord,
 )
-from pluang_agent.planner import (
+from trust_analytics.planner import (
     _propose_and_validate_revision,
     replan_question,
 )
@@ -365,7 +365,7 @@ def test_question_id_rewrite_is_rejected() -> None:
 def test_llm_call_failure_returns_system_error() -> None:
     """If the LLM call itself fails (auth/quota/etc.), the failure is
     surfaced cleanly."""
-    from pluang_agent.llm import LLMAuthError
+    from trust_analytics.llm import LLMAuthError
 
     class _Raises:
         available = True

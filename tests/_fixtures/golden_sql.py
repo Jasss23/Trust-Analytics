@@ -4,7 +4,7 @@ Hand-written deterministic SQL whose numerical output we know is correct.
 Lives in test fixtures only — used to validate that LLM-generated SQL produces
 the same numbers in R4 spot-checks. Not part of the product path.
 
-Relocated from src/pluang_agent/baseline.py at R1 per the locked decision.
+Relocated from src/trust_analytics/baseline.py at R1 per the locked decision.
 """
 
 from __future__ import annotations
@@ -12,13 +12,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pluang_agent.models import (
+from trust_analytics.models import (
     BusinessQuestion,
     InterpretationChoice,
     SourceProvenance,
     SQLAgentAnswer,
 )
-from pluang_agent.sql_runner import execute_read_only
+from trust_analytics.sql_runner import execute_read_only
 
 
 def golden_answer(db_path: Path, question: BusinessQuestion) -> SQLAgentAnswer:

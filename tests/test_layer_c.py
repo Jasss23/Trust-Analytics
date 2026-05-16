@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-from pluang_agent.layer_c import run_layer_c
-from pluang_agent.llm import LLMResponse
-from pluang_agent.models import (
+from trust_analytics.layer_c import run_layer_c
+from trust_analytics.llm import LLMResponse
+from trust_analytics.models import (
     Hypothesis,
     LayerACheck,
     LayerAReport,
@@ -18,7 +18,7 @@ from pluang_agent.models import (
 
 
 def _answer(interpretation_choices_count: int = 0) -> SQLAgentAnswer:
-    from pluang_agent.models import InterpretationChoice
+    from trust_analytics.models import InterpretationChoice
 
     ics = [
         InterpretationChoice(

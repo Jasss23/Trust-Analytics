@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from pluang_agent.metadata import case_root_from_data_dir, load_dbt_metadata
-from pluang_agent.metrics import load_metrics_registry
-from pluang_agent.models import BusinessQuestion
-from pluang_agent.planner import plan_question, validate_question_plan
-from pluang_agent.questions import get_question
+from trust_analytics.metadata import case_root_from_data_dir, load_dbt_metadata
+from trust_analytics.metrics import load_metrics_registry
+from trust_analytics.models import BusinessQuestion
+from trust_analytics.planner import plan_question, validate_question_plan
+from trust_analytics.questions import get_question
 
-CASE_DATA_DIR = Path("/Users/jiashunpang/projects/ai/pluang/docs/pluang_analytics_agent/data")
+CASE_DATA_DIR = Path("demo_data/fintech_analytics/data")
 
 
 @pytest.fixture(scope="module")

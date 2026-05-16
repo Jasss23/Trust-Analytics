@@ -7,7 +7,7 @@ bug at integration time.
 
 from __future__ import annotations
 
-from pluang_agent.models import (
+from trust_analytics.models import (
     AuditHandoff,
     BusinessQuestion,
     Hypothesis,

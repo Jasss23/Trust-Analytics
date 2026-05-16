@@ -4,11 +4,11 @@ import json
 import sqlite3
 from pathlib import Path
 
-from pluang_agent.agents.sql_agent import SQLAgent
-from pluang_agent.llm import LLMResponse
-from pluang_agent.metadata import DbtMetadata
-from pluang_agent.metrics import MetricsRegistry
-from pluang_agent.models import (
+from trust_analytics.agents.sql_agent import SQLAgent
+from trust_analytics.llm import LLMResponse
+from trust_analytics.metadata import DbtMetadata
+from trust_analytics.metrics import MetricsRegistry
+from trust_analytics.models import (
     BusinessQuestion,
     PlanBreakdown,
     PlanPeriod,
@@ -18,9 +18,9 @@ from pluang_agent.models import (
     SQLAgentAnswer,
     UsageRecord,
 )
-from pluang_agent.pre_flight import pre_flight_check
-from pluang_agent.quality_rules import run_layer_a
-from pluang_agent.sql_attempt import run_one_attempt
+from trust_analytics.pre_flight import pre_flight_check
+from trust_analytics.quality_rules import run_layer_a
+from trust_analytics.sql_attempt import run_one_attempt
 
 
 def _question() -> BusinessQuestion:

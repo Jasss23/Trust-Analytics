@@ -9,5 +9,4 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
-echo "Project environment is ready. Set OPENROUTER_API_KEY in .env before live runs."
-
+echo "Project environment is ready. Set OPENAI_API_KEY in .env before live runs."

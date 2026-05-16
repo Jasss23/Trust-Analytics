@@ -20,22 +20,20 @@ from pathlib import Path
 
 import pytest
 
-from pluang_agent.data_loader import load_csvs
-from pluang_agent.layer_b import run_layer_b
-from pluang_agent.metrics import load_metrics_registry
-from pluang_agent.models import SourceProvenance, SQLAgentAnswer
-from pluang_agent.questions import get_question
+from trust_analytics.data_loader import load_csvs
+from trust_analytics.layer_b import run_layer_b
+from trust_analytics.metrics import load_metrics_registry
+from trust_analytics.models import SourceProvenance, SQLAgentAnswer
+from trust_analytics.questions import get_question
 
-CASE_DATA_DIR = Path(
-    "/Users/jiashunpang/projects/ai/pluang/docs/pluang_analytics_agent/data"
-)
+CASE_DATA_DIR = Path("demo_data/fintech_analytics/data")
 
 
 @pytest.fixture(scope="module")
 def real_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
     if not CASE_DATA_DIR.exists():
         pytest.skip("Case study CSVs are not available locally.")
-    db_path = tmp_path_factory.mktemp("real") / "pluang.sqlite"
+    db_path = tmp_path_factory.mktemp("real") / "trust_analytics.sqlite"
     load_csvs(CASE_DATA_DIR, db_path)
     return db_path
 
