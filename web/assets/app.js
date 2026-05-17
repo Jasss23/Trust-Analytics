@@ -217,8 +217,17 @@ function AskWorkspace() {
   const [question, setQuestion] = React.useState(DEFAULT_QUESTION);
   const [fields, setFields] = React.useState({});
   const [shape, setShape] = React.useState(null);
+  const [llmStatus, setLlmStatus] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [run, setRun] = React.useState(null);
+  const [highlightedField, setHighlightedField] = React.useState(null);
+
+  React.useEffect(() => {
+    api("/api/runtime/llm").then(setLlmStatus).catch(() => setLlmStatus({
+      available: false,
+      message: "Could not read live LLM status.",
+    }));
+  }, []);
 
   React.useEffect(() => {
     if (!question.trim()) {
@@ -250,11 +259,7 @@ function AskWorkspace() {
     const timer = setInterval(() => {
       api(`/api/runs/${run.id}`).then(data => {
         setRun(data);
-        if (data.status === "completed" && data.resultId) {
-          clearInterval(timer);
-          navigate(`/analysis/${data.resultId}`);
-        }
-        if (data.status === "failed" || data.status === "needs_clarification") {
+        if (data.status === "completed" || data.status === "audit_required" || data.status === "failed" || data.status === "needs_clarification") {
           clearInterval(timer);
         }
       }).catch(() => clearInterval(timer));
@@ -262,7 +267,14 @@ function AskWorkspace() {
     return () => clearInterval(timer);
   }, [run?.id, run?.status]);
 
-  const setField = (key, value) => setFields(current => ({ ...current, [key]: value }));
+  const flashField = key => {
+    setHighlightedField(key);
+    setTimeout(() => setHighlightedField(current => current === key ? null : current), 1300);
+  };
+  const setField = (key, value) => {
+    flashField(key);
+    setFields(current => ({ ...current, [key]: value }));
+  };
   const confirmField = key => {
     const value = shape?.fields?.[key];
     if (value) setField(key, value);
@@ -275,13 +287,11 @@ function AskWorkspace() {
     });
     setRun(data);
   };
-  const suggestions = [
-    ["Focus on growth priority", "businessObjective", "Prioritise the next growth focus", "Business objective"],
-    ["Add source caveat", "desiredOutput", "Decision pack with source caveat", "Desired output"],
-    ["Compare by asset class", "dimension", "Asset class", "Dimension"],
-  ];
-  const toggleSuggestion = (key, value) => {
-    setField(key, fields[key] === value ? "" : value);
+  const applyAmendment = amendment => {
+    if (amendment.field) setField(amendment.field, amendment.value);
+    if (amendment.appendText && !question.toLowerCase().includes(amendment.appendText.trim().toLowerCase())) {
+      setQuestion(current => `${current.trim()}${amendment.appendText}`.trim());
+    }
   };
   const objectiveValue = fields.businessObjective ?? shape?.fields?.businessObjective ?? "";
   const periodValue = fields.period ?? shape?.fields?.period ?? "";
@@ -290,11 +300,17 @@ function AskWorkspace() {
   const audienceValue = fields.audience ?? shape?.fields?.audience ?? "";
   const outputValue = fields.desiredOutput ?? shape?.fields?.desiredOutput ?? "";
   const states = shape?.fieldStates || {};
-  const ready = Boolean(shape?.quality?.ready) && run?.status !== "running";
+  const criticalNeeds = shape?.criticalMissingFields || shape?.clarificationNeeds || [];
+  const running = run?.status === "running";
+  const llmAvailable = Boolean(llmStatus?.available);
+  const canValidate = Boolean(question.trim()) && !running && llmAvailable;
+  const ready = Boolean(shape?.quality?.ready) && !running;
+  const amendments = shape?.smartAmendments?.length ? shape.smartAmendments : [];
+  const options = shape?.dataGroundedOptions || shape?.suggestedChips || {};
 
   return h(React.Fragment, null,
     h("section", { className: "copilot-workspace" },
-      h(FlowRail, { shape, run, ready }),
+      h(FlowRail, { shape, run, ready, mode: "ask" }),
       h("div", { className: "ask-main" },
         h("section", { className: "ask-greeting" },
           h("h1", null, "Hi Jiashun, what business question can I help with today?"),
@@ -322,25 +338,30 @@ function AskWorkspace() {
           }),
           h("div", { className: "command-footer" },
             h("span", { className: "copilot-state" }, h(Icon, { name: "check" }), "AI Copilot"),
-            h("span", { className: "shape-state" }, loading ? "Shaping…" : "Confirm fields, then validate"),
-            h("button", { type: "button", className: "send-button", disabled: !ready, onClick: e => { e.preventDefault(); validate(); } }, h(Icon, { name: "arrow" }))
+            h("span", { className: !llmAvailable || criticalNeeds.length ? "shape-state needs" : "shape-state" },
+              loading ? "Shaping…" : !llmAvailable ? (llmStatus?.message || "Live LLM unavailable") : criticalNeeds.length ? criticalNeeds[0].message : "Ready to validate"
+            ),
+            h("button", {
+              type: "button",
+              className: "send-button",
+              disabled: !canValidate,
+              title: !llmAvailable ? (llmStatus?.message || "Live LLM unavailable") : criticalNeeds.length ? criticalNeeds[0].message : "Validate analysis",
+              onClick: e => { e.preventDefault(); validate(); }
+            }, h(Icon, { name: "arrow" }))
           )
         ),
         h("div", { className: "suggestion-row" },
           h(Icon, { name: "spark" }),
-          suggestions.map(([label, key, value, fieldLabel]) => {
-            const active = fields[key] === value;
-            return h("button", {
-              className: active ? "suggestion-chip active" : "suggestion-chip",
-              key: label,
-              type: "button",
-              title: active ? `Click to clear ${fieldLabel}` : `Apply to ${fieldLabel}`,
-              onClick: () => toggleSuggestion(key, value)
-            },
-              active ? h(Icon, { name: "check" }) : null,
-              label
-            );
-          }),
+          amendments.map(amendment => h("button", {
+            className: fields[amendment.field] === amendment.value ? "suggestion-chip active" : "suggestion-chip",
+            key: amendment.key,
+            type: "button",
+            title: amendment.effect,
+            onClick: () => applyAmendment(amendment)
+          },
+            fields[amendment.field] === amendment.value ? h(Icon, { name: "check" }) : null,
+            amendment.label
+          )),
           h("button", { className: "suggestion-chip examples", onClick: () => navigate("/library") },
             h(Icon, { name: "search" }), "Examples"
           )
@@ -352,8 +373,9 @@ function AskWorkspace() {
             mode: "select",
             value: objectiveValue,
             placeholder: "Select business objective",
-            options: shape?.suggestedChips?.businessObjective || [],
+            options: options.businessObjective || [],
             state: states.businessObjective,
+            highlighted: highlightedField === "businessObjective",
             onConfirm: () => confirmField("businessObjective"),
             onPick: v => setField("businessObjective", v),
             onClear: () => setField("businessObjective", "")
@@ -363,8 +385,9 @@ function AskWorkspace() {
             label: "Time period",
             mode: "segmented",
             value: periodValue,
-            options: ["Last 30 days", "Last 90 days", "Current quarter", periodValue || "October 2025"],
+            options: options.period || ["October 2025", "November 2025", "December 2025", "October to December 2025"],
             state: states.period,
+            highlighted: highlightedField === "period",
             onConfirm: () => confirmField("period"),
             onPick: v => setField("period", v)
           }),
@@ -374,9 +397,10 @@ function AskWorkspace() {
             mode: "tokens",
             value: segmentValue,
             placeholder: "Select object or segment",
-            options: shape?.suggestedChips?.segment || [],
+            options: options.segment || [],
             tokens: segmentValue ? [segmentValue] : [],
             state: states.segment,
+            highlighted: highlightedField === "segment",
             onConfirm: () => confirmField("segment"),
             onClear: () => setField("segment", ""),
             onPick: v => setField("segment", v)
@@ -390,9 +414,10 @@ function AskWorkspace() {
               label: "Dimension",
               mode: "optional",
               value: dimensionValue,
-              placeholder: "Select dimension (e.g., region, industry, product)",
-              options: shape?.suggestedChips?.dimension || [],
+              placeholder: "Select comparison axis",
+              options: options.dimension || [],
               state: states.dimension,
+              highlighted: highlightedField === "dimension",
               onConfirm: () => confirmField("dimension"),
               onPick: v => setField("dimension", v),
               onClear: () => setField("dimension", "")
@@ -403,8 +428,9 @@ function AskWorkspace() {
               mode: "optional",
               value: audienceValue,
               placeholder: "Select decision audience",
-              options: shape?.suggestedChips?.audience || [],
+              options: options.audience || [],
               state: states.audience,
+              highlighted: highlightedField === "audience",
               onConfirm: () => confirmField("audience"),
               onPick: v => setField("audience", v),
               onClear: () => setField("audience", "")
@@ -415,8 +441,9 @@ function AskWorkspace() {
               mode: "optional",
               value: outputValue,
               placeholder: "Select output format (e.g., deck, report, extract)",
-              options: shape?.suggestedChips?.desiredOutput || [],
+              options: options.desiredOutput || [],
               state: states.desiredOutput,
+              highlighted: highlightedField === "desiredOutput",
               onConfirm: () => confirmField("desiredOutput"),
               onPick: v => setField("desiredOutput", v),
               onClear: () => setField("desiredOutput", "")
@@ -425,7 +452,9 @@ function AskWorkspace() {
         ),
       ),
       h("aside", { className: "inspector-panel" },
+        h(LlmStatusCard, { status: llmStatus }),
         h(QuestionQuality, { shape, loading }),
+        h(RunResultPreview, { run }),
         h("div", { className: "inspector-section" },
           h("div", { className: "section-minihead" },
             h("span", { className: "kicker" }, "Verified analysis path"),
@@ -439,9 +468,9 @@ function AskWorkspace() {
         ),
         h(RunTimeline, { run, shape }),
         h(ArtifactPreview, { shape }),
-        h("button", { className: "primary-wide build-cta", disabled: !ready, onClick: validate },
+        h("button", { className: "primary-wide build-cta", disabled: !canValidate, onClick: validate },
           h(Icon, { name: "presentation" }),
-          run?.status === "running" ? "Validating live run..." : "Validate analysis"
+          running ? "Validating live run..." : !llmAvailable ? "Set OPENAI_API_KEY to validate" : criticalNeeds.length ? "Validate after adding context" : "Validate analysis"
         ),
         h("button", { className: "secondary-wide", onClick: () => navigate(`/review/${shape?.recommendedAnalysisId || HERO_ID}`) },
           h(Icon, { name: "shield" }),
@@ -452,25 +481,40 @@ function AskWorkspace() {
   );
 }
 
-function FlowRail({ shape, run, ready }) {
+function journeyState({ shape, run, ready, active }) {
+  if (active === "analysis") return { currentStep: 3, completedThrough: 2, packageLabel: "Package" };
+  if (active === "review") return { currentStep: 3, completedThrough: 2, packageLabel: "Evidence" };
+  if (active === "handoff") return { currentStep: 3, completedThrough: 2, packageLabel: "Audit" };
+  if (active === "admin" || active === "library") return { currentStep: 0, completedThrough: -1, packageLabel: "Package" };
+  if (run?.status === "completed" || run?.status === "audit_required") return { currentStep: 3, completedThrough: 2, packageLabel: run.status === "audit_required" ? "Audit" : "Package" };
+  if (run?.status === "running") return { currentStep: 2, completedThrough: 1, packageLabel: "Package" };
+  if (ready) return { currentStep: 2, completedThrough: 1, packageLabel: "Package" };
+  if (shape && Object.values(shape.fieldStates || {}).some(state => state.status && state.status !== "missing")) return { currentStep: 1, completedThrough: 0, packageLabel: "Package" };
+  return { currentStep: 0, completedThrough: -1, packageLabel: "Package" };
+}
+
+function FlowRail({ shape, run, ready, active = "ask" }) {
+  const state = journeyState({ shape, run, ready, active });
+  const blocked = shape?.criticalMissingFields?.[0]?.label
+    ? `Add ${shape.criticalMissingFields[0].label.toLowerCase()}`
+    : "Validate first";
   const items = [
     ["Ask", "Refine the business question"],
     ["Shape", "Confirm context and constraints"],
     ["Validate", "Check logic and data quality"],
-    ["Package", "Build decision pack"],
+    [state.packageLabel, state.packageLabel === "Audit" ? "Resolve or hand off" : state.packageLabel === "Evidence" ? "Inspect evidence" : "Build decision pack"],
   ];
-  let currentStep = 0;
-  if (run?.status === "completed") currentStep = 3;
-  else if (run?.status === "running") currentStep = 2;
-  else if (ready) currentStep = 2;
-  else if (shape && Object.values(shape.fieldStates || {}).some(state => state.status && state.status !== "missing")) currentStep = 1;
   const goToStep = step => {
     if (step === 0) {
-      const input = document.querySelector(".command-input");
-      input?.focus();
-      document.querySelector(".command-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (active !== "ask") navigate("/");
+      else {
+        const input = document.querySelector(".command-input");
+        input?.focus();
+        document.querySelector(".command-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     } else if (step === 1) {
-      document.querySelector(".field-stack")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (active !== "ask") navigate("/");
+      else document.querySelector(".field-stack")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (step === 2) {
       const btn = document.querySelector(".build-cta");
       if (btn) {
@@ -478,46 +522,49 @@ function FlowRail({ shape, run, ready }) {
         if (ready) btn.focus();
       }
     } else if (step === 3) {
-      if (run?.status === "completed" && run?.resultId) {
+      if (run?.status === "audit_required" && run?.resultId) {
+        navigate(`/handoff/${run.resultId}`);
+      } else if (run?.status === "completed" && run?.resultId) {
         navigate(`/analysis/${run.resultId}`);
       }
     }
   };
-  const packageReady = run?.status === "completed" && Boolean(run?.resultId);
+  const packageReady = ["completed", "audit_required"].includes(run?.status) && Boolean(run?.resultId);
   const stepEnabled = step => {
+    if (active !== "ask") return step === 0 || step === 3;
     if (step === 3) return packageReady;
-    if (step <= currentStep) return true;
-    if (step === currentStep + 1) return true;
+    if (step <= state.currentStep) return true;
+    if (step === state.currentStep + 1) return true;
     return false;
   };
   return h("aside", { className: "flow-rail" },
     items.map((item, index) => {
-      const state = index < currentStep ? "done" : index === currentStep ? "active" : "pending";
+      const stepState = index <= state.completedThrough ? "done" : index === state.currentStep ? "active" : "pending";
       const enabled = stepEnabled(index);
-      const hint = index === 3 && state !== "done"
+      const hint = index === 3 && stepState !== "done"
         ? "Available after Validate"
-        : state === "done"
+        : stepState === "done"
           ? `Jump back to ${item[0]}`
           : `Go to ${item[0]}`;
       const showLockHint = index === 3 && !enabled;
       return h("button", {
         type: "button",
-        className: `rail-step ${state}`,
+        className: `rail-step ${stepState}`,
         key: item[0],
         title: hint,
-        "aria-current": state === "active" ? "step" : null,
+        "aria-current": stepState === "active" ? "step" : null,
         disabled: !enabled,
         onClick: () => enabled && goToStep(index),
       },
         h("span", { className: "rail-number" },
-          state === "done" ? h(Icon, { name: "check" }) : String(index + 1)
+          stepState === "done" ? h(Icon, { name: "check" }) : String(index + 1)
         ),
         h("span", { className: "rail-step-copy" },
           h("strong", null, item[0]),
           h("small", null, item[1]),
           showLockHint ? h("span", { className: "rail-lock-hint" },
             h(Icon, { name: "warning" }),
-            "Validate first"
+            blocked
           ) : null
         )
       );
@@ -526,27 +573,7 @@ function FlowRail({ shape, run, ready }) {
 }
 
 function WorkspaceRail({ active }) {
-  const items = [
-    ["ask", "Ask", "Shape a natural-language question", "/"],
-    ["library", "Library", "Open seed and validated packs", "/library"],
-    ["analysis", "Build pack", "Package a decision-ready answer", `/analysis/${HERO_ID}`],
-    ["review", "Evidence room", "Inspect SQL, sources, and QA", `/review/${HERO_ID}`],
-    ["admin", "Admin", "Review latency and token cost", "/admin/costs"],
-  ];
-  return h("aside", { className: "flow-rail workspace-rail" },
-    items.map((item, index) => h("button", {
-      className: item[0] === active ? "rail-step active" : "rail-step",
-      key: item[0],
-      type: "button",
-      onClick: () => navigate(item[3])
-    },
-      h("span", { className: "rail-number" }, String(index + 1)),
-      h("span", null,
-        h("strong", null, item[1]),
-        h("small", null, item[2])
-      )
-    ))
-  );
+  return h(FlowRail, { active, ready: active !== "ask" });
 }
 
 function SubpageWorkspace({ active, children, inspector }) {
@@ -586,8 +613,8 @@ const FIELD_HINTS = {
   },
   "Object / segment": {
     title: "Object / segment",
-    body: "What population or transaction set to score. Keeps the SQL focused on the right slice.",
-    example: "e.g. Completed trading activity.",
+    body: "Which business slice should this answer focus on. It keeps the analysis aligned to the decision you are making.",
+    example: "e.g. completed trades, asset classes, monthly totals.",
   },
   "Dimension": {
     title: "Comparison dimension",
@@ -635,10 +662,17 @@ function useClickOutside(ref, onOutside) {
   }, [ref, onOutside]);
 }
 
-function FieldRow({ icon, label, mode = "select", value, placeholder, options = [], tokens = [], state, onPick, onClear, onConfirm }) {
+function FieldRow({ icon, label, mode = "select", value, placeholder, options = [], tokens = [], state, highlighted, onPick, onClear, onConfirm }) {
   const displayValue = value || placeholder || "Not set";
   const uniqueOptions = Array.from(new Set(options.filter(Boolean)));
   const status = value ? (state?.status || "confirmed") : "missing";
+  const statusLabel = {
+    confirmed: "Confirmed",
+    manual_override: "User override",
+    inferred: "Inferred from question",
+    defaulted: "Defaulted",
+    missing: "Needs input",
+  }[status] || status.replace("_", " ");
   const hint = FIELD_HINTS[label] || { title: label, body: `Help the agent infer ${label.toLowerCase()}.` };
   const [open, setOpen] = React.useState(false);
   const [calendarOpen, setCalendarOpen] = React.useState(false);
@@ -673,7 +707,7 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
     setCalendarOpen(current => !current);
   };
   const popoverOptions = mode === "segmented" ? CALENDAR_PRESETS : uniqueOptions;
-  return h("div", { className: "field-row", ref: wrapRef },
+  return h("div", { className: highlighted ? "field-row highlighted" : "field-row", ref: wrapRef },
     h("div", { className: "field-label" },
       h(Icon, { name: icon || "target" }),
       h("span", null, label),
@@ -718,9 +752,9 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
         onPick: pickAndClose,
       }) : null,
       h("div", { className: `field-state ${status}` },
-        h("span", null, status.replace("_", " ")),
+        h("span", null, statusLabel),
         status === "inferred" ? h("button", { type: "button", onClick: onConfirm }, "Confirm") : null,
-        status === "missing" ? h("small", null, "Add it here or make the question more explicit.") : null
+        state?.reason ? h("small", null, state.reason) : null
       )
     )
   );
@@ -935,6 +969,7 @@ function QuestionQuality({ shape, loading }) {
   ];
   const tagFor = status => {
     if (!status || status === "missing") return "Missing";
+    if (status === "defaulted") return "Default";
     if (status === "confirmed") return "Complete";
     if (status === "manual_override") return "Confirmed";
     return "Inferred";
@@ -965,6 +1000,67 @@ function QuestionQuality({ shape, loading }) {
         h(Icon, { name: confidence === "high" ? "check" : "info" }),
         confidence === "high" ? "High confidence" : "Medium confidence"
       )
+    )
+  );
+}
+
+function LlmStatusCard({ status }) {
+  const available = Boolean(status?.available);
+  return h("div", { className: available ? "inspector-section llm-status ready" : "inspector-section llm-status missing" },
+    h("div", { className: "section-minihead" },
+      h("span", { className: "kicker" }, "Live LLM"),
+      h("span", { className: available ? "status-mini" : "status-mini warn" },
+        available ? (status?.mock ? "Mock mode" : "Configured") : "Missing key"
+      )
+    ),
+    h("strong", null, available ? "Validation will call the agent chain" : "Live validation is blocked"),
+    h("p", null, status?.message || "Checking runtime LLM status."),
+    !available ? h("p", { className: "llm-hint" }, "Set OPENAI_API_KEY in .env, then restart the server.") : null
+  );
+}
+
+function RunResultPreview({ run }) {
+  if (!run || run.status === "running") return null;
+  if (run.status === "needs_clarification") {
+    return h("div", { className: "inspector-section result-preview caution" },
+      h("div", { className: "section-minihead" },
+        h("span", { className: "kicker" }, "Next step"),
+        h("span", { className: "status-mini warn" }, "Needs context")
+      ),
+      h("strong", null, "Add critical context before validation"),
+      h("p", null, run.clarificationNeeds?.[0]?.message || "The run needs one more concrete input before SQL validation."),
+    );
+  }
+  if (run.status === "failed") {
+    return h("div", { className: "inspector-section result-preview error" },
+      h("div", { className: "section-minihead" },
+        h("span", { className: "kicker" }, "Run failed"),
+        h("span", { className: "status-mini fail" }, "Failed")
+      ),
+      h("strong", null, run.error?.type || "System error"),
+      h("p", null, run.error?.suggestedAction || run.error?.message || "Revise the question and run again.")
+    );
+  }
+  const result = run.result || {};
+  const audit = run.status === "audit_required" || result.status?.label === "Audit required";
+  if (!result.id) return null;
+  return h("div", { className: audit ? "inspector-section result-preview audit" : "inspector-section result-preview ready" },
+    h("div", { className: "section-minihead" },
+      h("span", { className: "kicker" }, audit ? "Audit handoff" : "Validated result"),
+      h(Status, { status: result.status })
+    ),
+    h("strong", null, result.headline || result.decisionPack?.title || result.id),
+    h("p", null, result.recommendation || result.recommendedUse || "The run is ready for packaging."),
+    h("div", { className: "result-actions" },
+      h("button", {
+        type: "button",
+        onClick: () => navigate(audit ? `/handoff/${result.id}` : `/analysis/${result.id}`)
+      }, h(Icon, { name: audit ? "warning" : "presentation" }), audit ? "Open audit handoff" : "Open decision pack"),
+      h("button", {
+        type: "button",
+        className: "secondary",
+        onClick: () => navigate(`/review/${result.id}`)
+      }, h(Icon, { name: "shield" }), "Evidence room")
     )
   );
 }
@@ -1450,6 +1546,7 @@ function ReviewPage({ id }) {
   if (!analysis) return h(LoadingPanel, { label: "Opening evidence room..." });
   const ev = analysis.analystEvidence;
   const source = ev.source || {};
+  const systemError = analysis.status?.label === "Audit required" && ev.sql === "" && !ev.source;
   return h(SubpageWorkspace, {
     active: "review",
     inspector: [
@@ -1474,8 +1571,8 @@ function ReviewPage({ id }) {
   },
     h("section", { className: "subpage-hero evidence-hero" },
       h("div", null,
-        h("span", { className: "kicker" }, "Evidence room"),
-        h("h1", null, "Why this answer is defensible"),
+        h("span", { className: "kicker" }, systemError ? "Audit required" : "Evidence room"),
+        h("h1", null, systemError ? "Live agent validation did not complete" : "Why this answer is defensible"),
         h("p", null, analysis.question)
       )
     ),
@@ -1483,12 +1580,12 @@ function ReviewPage({ id }) {
       h("div", { className: "tabs" },
         ["source", "sql", "qa", "challenge"].map(item => h("button", { className: tab === item ? "tab active" : "tab", onClick: () => setTab(item), key: item }, titleCase(item)))
       ),
-      tab === "source" ? h("div", { className: "evidence-card" },
-        h("span", { className: "kicker" }, "Source provenance"),
-        h("h2", null, source.primary_table || "Unknown source"),
-        h("p", null, source.why_chosen || "No source rationale available."),
-        h(SourceTable, { rows: analysis.sourceComparison })
-      ) : null,
+      tab === "source" ? systemError ? h(SystemErrorEvidence, { analysis }) : h("div", { className: "evidence-card" },
+          h("span", { className: "kicker" }, "Source provenance"),
+          h("h2", null, source.primary_table || "Unknown source"),
+          h("p", null, source.why_chosen || "No source rationale available."),
+          h(SourceTable, { rows: analysis.sourceComparison })
+        ) : null,
       tab === "sql" ? h("div", { className: "evidence-card" },
         h("span", { className: "kicker" }, "Executed SQL"),
         h("pre", null, ev.sql)
@@ -1516,13 +1613,32 @@ function SourceTable({ rows }) {
   );
 }
 
+function SystemErrorEvidence({ analysis }) {
+  const checks = analysis.analystEvidence?.layerA?.checks || [];
+  const failingCheck = checks.find(check => String(check.name || "").startsWith("system_error"));
+  const error = analysis.audit?.systemError || analysis.systemError || {
+    error_class: failingCheck?.name?.replace("system_error_", ""),
+    message: failingCheck?.detail,
+  };
+  const warnings = analysis.analystEvidence?.layerA?.warnings || analysis.executiveSummary || [];
+  return h("div", { className: "evidence-card system-error-card" },
+    h("span", { className: "kicker" }, "Live validation blocked"),
+    h("h2", null, error.error_class === "auth" ? "OPENAI_API_KEY is missing" : "No SQL evidence was produced"),
+    h("p", null, error.message || "The agent chain did not produce SQL/source evidence for this run."),
+    h("div", { className: "cache-note audit" }, "This is not a defensible evidence result yet. Configure the LLM, rerun validation, then open the evidence room again."),
+    warnings.length ? h("ul", { className: "evidence-list" },
+      warnings.slice(0, 4).map((item, idx) => h("li", { key: idx }, String(item)))
+    ) : null
+  );
+}
+
 function HandoffPage({ id }) {
   const [analysis, setAnalysis] = React.useState(null);
   React.useEffect(() => { api(`/api/analysis/${id}`).then(setAnalysis); }, [id]);
   if (!analysis) return h(LoadingPanel, { label: "Preparing audit brief..." });
   const audit = analysis.audit;
   return h(SubpageWorkspace, {
-    active: "review",
+    active: "handoff",
     inspector: [
       h("div", { key: "audit", className: "inspector-section quality-section" },
         h("div", { className: "section-minihead" },

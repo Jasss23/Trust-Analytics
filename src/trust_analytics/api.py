@@ -14,6 +14,8 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from trust_analytics.config import load_settings
+from trust_analytics.llm import make_client
 from trust_analytics.portal import (
     HERO_ID,
     cached_analysis,
@@ -76,6 +78,34 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/runtime/llm")
+def llm_status() -> dict[str, Any]:
+    settings = load_settings()
+    client = make_client(settings)
+    available = bool(getattr(client, "available", False))
+    message = "Live LLM is configured."
+    if not available and settings.legacy_openrouter_configured:
+        message = (
+            "Legacy OpenRouter config was detected but ignored. Set OPENAI_API_KEY "
+            "to use native OpenAI validation."
+        )
+    elif not available:
+        message = "OPENAI_API_KEY is not set, so live validation cannot call the LLM."
+    elif settings.ignored_openai_base_url:
+        message = "Live LLM is configured. Non-native OPENAI_BASE_URL was ignored."
+    return {
+        "configured": bool(settings.openai_api_key) or type(client).__name__ == "FixtureLLMClient",
+        "available": available,
+        "client": type(client).__name__,
+        "model": settings.openai_model,
+        "mock": type(client).__name__ == "FixtureLLMClient",
+        "provider": "openai-native",
+        "legacyOpenRouterDetected": settings.legacy_openrouter_configured,
+        "ignoredCustomBaseUrl": bool(settings.ignored_openai_base_url),
+        "message": message,
+    }
+
+
 @app.get("/api/demo-questions")
 def questions() -> list[dict[str, str]]:
     return demo_questions()
@@ -135,13 +165,19 @@ def create_run(request: RunSessionRequest) -> dict[str, Any]:
     start = time.perf_counter()
     shape = shape_question(question_text=request.question_text, **_shape_kwargs(request.fields))
     run_id = uuid.uuid4().hex
+    effective_fields = {
+        key: value
+        for key, value in (shape.get("fields") or {}).items()
+        if value is not None
+    }
     session = {
         "id": run_id,
         "status": "needs_clarification" if shape["clarificationNeeds"] else "running",
         "questionText": request.question_text,
-        "fields": request.fields,
+        "fields": effective_fields,
         "shape": shape,
         "clarificationNeeds": shape["clarificationNeeds"],
+        "nextActions": _next_actions_for_shape(shape),
         "stages": _initial_stages(),
         "resultId": None,
         "result": None,
@@ -191,7 +227,7 @@ def get_run_result(run_id: str) -> dict[str, Any]:
         session = RUN_SESSIONS.get(run_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Run not found.")
-        if session["status"] != "completed" or session["result"] is None:
+        if session["status"] not in {"completed", "audit_required"} or session["result"] is None:
             raise HTTPException(status_code=409, detail="Run result is not ready.")
         return session["result"]
 
@@ -357,6 +393,8 @@ def _run_session(run_id: str, request: RunSessionRequest) -> None:
     start = time.perf_counter()
     stage_start = start
     try:
+        with RUN_LOCK:
+            session_fields = dict(RUN_SESSIONS[run_id].get("fields") or {})
         with telemetry_context(
             run_id=run_id,
             action="validate_run",
@@ -376,7 +414,7 @@ def _run_session(run_id: str, request: RunSessionRequest) -> None:
             analysis = run_and_persist_analysis(
                 question_id=request.question_id,
                 question_text=request.question_text,
-                fields=request.fields,
+                fields=session_fields,
             )
             stage_start = _advance_stage(run_id, 3, stage_start)
 
@@ -396,9 +434,10 @@ def _run_session(run_id: str, request: RunSessionRequest) -> None:
             )
         with RUN_LOCK:
             session = RUN_SESSIONS[run_id]
-            session["status"] = "completed"
+            session["status"] = _run_status_for_analysis(analysis)
             session["resultId"] = analysis["id"]
             session["result"] = analysis
+            session["nextActions"] = _next_actions_for_analysis(analysis)
     except Exception as exc:  # noqa: BLE001 - run sessions surface structured failures.
         record_event(
             event_type="app_call",
@@ -420,6 +459,14 @@ def _run_session(run_id: str, request: RunSessionRequest) -> None:
                     "Check the live agent configuration or revise the question, then validate again."
                 ),
             }
+            session["nextActions"] = [
+                {"key": "revise", "label": "Revise question", "route": "/"},
+                {
+                    "key": "evidence",
+                    "label": "Open nearest evidence room",
+                    "route": f"/review/{HERO_ID}",
+                },
+            ]
             for stage in session["stages"]:
                 if stage["state"] == "current":
                     stage["state"] = "failed"
@@ -430,6 +477,60 @@ def _status_for_analysis(analysis: dict[str, Any]) -> str:
     if label == "Audit required":
         return "audit_required"
     return "success"
+
+
+def _run_status_for_analysis(analysis: dict[str, Any]) -> str:
+    label = (analysis.get("status") or {}).get("label")
+    if label == "Audit required":
+        return "audit_required"
+    return "completed"
+
+
+def _next_actions_for_shape(shape: dict[str, Any]) -> list[dict[str, str]]:
+    if shape.get("clarificationNeeds"):
+        return [
+            {
+                "key": "clarify",
+                "label": "Add missing critical context",
+                "route": "/",
+            }
+        ]
+    return [
+        {"key": "validate", "label": "Validate analysis", "route": "/"},
+        {
+            "key": "evidence",
+            "label": "Open evidence room",
+            "route": f"/review/{shape.get('recommendedAnalysisId') or HERO_ID}",
+        },
+    ]
+
+
+def _next_actions_for_analysis(analysis: dict[str, Any]) -> list[dict[str, str]]:
+    if (analysis.get("status") or {}).get("label") == "Audit required":
+        return [
+            {
+                "key": "audit",
+                "label": "Open audit handoff",
+                "route": f"/handoff/{analysis['id']}",
+            },
+            {
+                "key": "evidence",
+                "label": "Open evidence room",
+                "route": f"/review/{analysis['id']}",
+            },
+        ]
+    return [
+        {
+            "key": "pack",
+            "label": "Open decision pack",
+            "route": f"/analysis/{analysis['id']}",
+        },
+        {
+            "key": "evidence",
+            "label": "Open evidence room",
+            "route": f"/review/{analysis['id']}",
+        },
+    ]
 
 
 WEB_DIR = Path(__file__).parents[2] / "web"

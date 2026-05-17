@@ -173,9 +173,15 @@ def smoke_script() -> str:
 
       await clickByText('Ask new question');
       await sleep(500);
-      await clickByText('Focus on growth priority');
-      await clickByText('Add source caveat');
-      await clickByText('Compare by asset class');
+      await clickByText('Add period: October 2025');
+      await clickByText('Set audience: Leadership');
+      await clickByText('Ask for decision pack');
+      report.smartAmendments = [...document.querySelectorAll('.suggestion-chip')]
+        .map(node => (node.textContent || '').trim())
+        .filter(Boolean);
+      report.fieldStates = [...document.querySelectorAll('.field-state')]
+        .map(node => (node.textContent || '').trim());
+      report.askPathAfterAmendments = location.pathname;
 
       const confirmButtons = [...document.querySelectorAll('button')]
         .filter(button => (button.textContent || '').trim() === 'Confirm');
@@ -258,6 +264,7 @@ def run_smoke(url: str, port: int, screenshot_dir: Path) -> dict:
         cdp.call("Runtime.enable")
         cdp.call("Page.enable")
         time.sleep(1)
+        save_screenshot(cdp, screenshot_dir / "ask.png")
         result = evaluate(cdp, smoke_script(), timeout=20)
         save_screenshot(cdp, screenshot_dir / "admin-costs.png")
         evaluate(cdp, "location.href = '/library'; true", timeout=5)
@@ -275,6 +282,7 @@ def run_smoke(url: str, port: int, screenshot_dir: Path) -> dict:
         handoff_title = evaluate(cdp, "document.querySelector('.subpage-hero.blocked h1')?.textContent || ''", timeout=3)
         result["handoffTitle"] = handoff_title
         result["screenshots"] = {
+            "ask": str(screenshot_dir / "ask.png"),
             "adminCosts": str(screenshot_dir / "admin-costs.png"),
             "library": str(screenshot_dir / "library.png"),
             "pack": str(screenshot_dir / "pack.png"),

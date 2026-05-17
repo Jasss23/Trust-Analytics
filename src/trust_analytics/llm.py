@@ -24,7 +24,7 @@ from typing import Any, Protocol
 import openai
 from openai import OpenAI
 
-from trust_analytics.config import Settings
+from trust_analytics.config import NATIVE_OPENAI_BASE_URL, Settings
 from trust_analytics.models import UsageRecord
 from trust_analytics.telemetry import record_event
 
@@ -107,6 +107,7 @@ class OpenAIClient:
         start = time.perf_counter()
         client = OpenAI(
             api_key=self.settings.openai_api_key,
+            base_url=NATIVE_OPENAI_BASE_URL,
         )
         kwargs: dict[str, Any] = {
             "model": self.settings.openai_model,

@@ -42,6 +42,12 @@ ASK_FIELD_LABELS = {
     "desiredOutput": "Desired output",
 }
 
+CRITICAL_ASK_FIELDS = {"period"}
+DEFAULT_ASK_FIELDS = {
+    "audience": "Leadership",
+    "desiredOutput": "Decision pack",
+}
+
 
 @dataclass(frozen=True)
 class CachedArtifacts:
@@ -239,21 +245,22 @@ def shape_question(
         for key in ASK_FIELD_LABELS
         if field_states[key]["status"] == "missing"
     ]
-    ready_count = len(ASK_FIELD_LABELS) - len(missing)
-    score = round(ready_count / len(ASK_FIELD_LABELS) * 100)
-    blockers = [
+    critical_missing = [
         {
             "key": key,
             "label": ASK_FIELD_LABELS[key],
-            "message": (
-                f"Confirm {ASK_FIELD_LABELS[key].lower()} before validation, or make the "
-                "question explicit enough for the agent to infer it."
-            ),
+            "message": _critical_missing_message(key),
         }
-        for key, state in field_states.items()
-        if state["status"] in {"missing", "inferred"}
+        for key in CRITICAL_ASK_FIELDS
+        if field_states[key]["status"] == "missing"
     ]
+    ready_count = len(ASK_FIELD_LABELS) - len(
+        [item for item in missing if item["key"] in CRITICAL_ASK_FIELDS]
+    )
+    score = round(ready_count / len(ASK_FIELD_LABELS) * 100)
+    blockers = critical_missing
     ready = not blockers
+    options = _data_grounded_options(match["id"])
     return {
         "input": text,
         "canonicalQuestion": _canonical_question(analysis, inferred),
@@ -264,8 +271,11 @@ def shape_question(
         "fieldStates": field_states,
         "confirmedFields": explicit,
         "missingFields": missing,
+        "criticalMissingFields": critical_missing,
         "clarificationNeeds": blockers,
         "suggestedChips": _ask_suggested_chips(match["id"]),
+        "smartAmendments": _smart_amendments(inferred, field_states, options),
+        "dataGroundedOptions": options,
         "recommendedAnalysisId": match["id"],
         "recommendedAnalysisTitle": analysis["decisionPack"]["title"],
         "verifiedPath": {
@@ -281,8 +291,8 @@ def shape_question(
             "ready": ready,
         },
         "explanation": (
-            "The agent inferred the guided fields it can. Confirm or fill the "
-            "remaining fields before running live validation."
+            "The agent inferred the guided fields it can. Critical missing items block "
+            "validation; audience and output default to a leadership decision pack."
         ),
     }
 
@@ -413,17 +423,31 @@ def _field_states(
         user_value = (provided.get(key) or "").strip()
         if user_value and user_value != value:
             status = "manual_override"
+            source = "user"
+            reason = "You changed this field after the first inference."
         elif explicit.get(key):
             status = "confirmed"
+            source = "user" if user_value else "question"
+            reason = "Detected directly from your question." if not user_value else "Set by you."
+        elif key in DEFAULT_ASK_FIELDS and value == DEFAULT_ASK_FIELDS[key]:
+            status = "defaulted"
+            source = "data_default"
+            reason = "Defaulted so the run can produce a usable decision pack."
         elif value:
             status = "inferred"
+            source = "question"
+            reason = "Inferred from the wording and the closest verified analysis path."
         else:
             status = "missing"
+            source = "unresolved"
+            reason = _critical_missing_message(key) if key in CRITICAL_ASK_FIELDS else "Optional for validation."
         states[key] = {
             "label": label,
             "value": value,
             "status": status,
-            "confirmed": status in {"confirmed", "manual_override"},
+            "source": source,
+            "reason": reason,
+            "confirmed": status in {"confirmed", "manual_override", "defaulted"},
         }
     return states
 
@@ -505,8 +529,10 @@ def _infer_ask_fields(
         "period": selected_period,
         "segment": selected_segment,
         "dimension": selected_dimension,
-        "audience": audience if audience is not None else "",
-        "desiredOutput": desired_output if desired_output is not None else "",
+        "audience": audience if audience is not None else DEFAULT_ASK_FIELDS["audience"],
+        "desiredOutput": (
+            desired_output if desired_output is not None else DEFAULT_ASK_FIELDS["desiredOutput"]
+        ),
     }
 
 
@@ -580,6 +606,104 @@ def _display_period(period: str) -> str:
         "2025-12-01 to 2026-01-01": "December 2025",
     }
     return labels.get(period, period)
+
+
+def _critical_missing_message(key: str) -> str:
+    if key == "period":
+        return "Add a time period so validation can run against a bounded data window."
+    return f"Add {ASK_FIELD_LABELS[key].lower()} before validation."
+
+
+def _period_labels() -> list[str]:
+    return ["October 2025", "November 2025", "December 2025", "October to December 2025"]
+
+
+def _asset_class_options() -> list[str]:
+    values: set[str] = set()
+    for path in (Path("demo_data/fintech_analytics/data/fct_trading_daily.csv"),):
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                value = (row.get("asset_class") or "").strip()
+                if value:
+                    values.add(value)
+    return [item.title() if item != "gss" else "GSS" for item in sorted(values)]
+
+
+def _data_grounded_options(analysis_id: str) -> dict[str, list[str]]:
+    registry = load_metrics_registry()
+    metrics = [_metric_label(entry.metric_name) for entry in registry.entries.values()]
+    dimensions = sorted({
+        entry.primary.breakdown.replace("_", " ").title()
+        for entry in registry.entries.values()
+        if entry.primary.breakdown and entry.primary.breakdown != "month_bucket"
+    })
+    if "Month" not in dimensions:
+        dimensions.append("Month")
+    if "Source" not in dimensions:
+        dimensions.append("Source")
+    segments = ["Completed trading activity", "Completed GTV", "Monthly summary", *_asset_class_options()]
+    if analysis_id == MTU_ID:
+        segments = ["Transacting users", "AUM-defined users", "Product analytics users"]
+    if analysis_id == AUDIT_ID:
+        segments = ["Completed GTV", "Monthly summary", "Canonical daily mart"]
+    return {
+        "metric": metrics,
+        "businessObjective": _ask_suggested_chips(analysis_id)["businessObjective"],
+        "period": _period_labels(),
+        "segment": list(dict.fromkeys(segments)),
+        "dimension": dimensions,
+        "audience": ["Leadership", "CEO", "Finance", "Growth team"],
+        "desiredOutput": ["Decision pack", "Executive slide", "Email brief", "CSV extract", "Audit brief"],
+    }
+
+
+def _smart_amendments(
+    fields: dict[str, str],
+    states: dict[str, dict[str, str | bool]],
+    options: dict[str, list[str]],
+) -> list[dict[str, str]]:
+    amendments: list[dict[str, str]] = []
+    if states["period"]["status"] == "missing":
+        amendments.append({
+            "key": "period_oct_2025",
+            "label": "Add period: October 2025",
+            "field": "period",
+            "value": "October 2025",
+            "appendText": " for October 2025",
+            "effect": "Adds a bounded data window for validation.",
+        })
+    if states["audience"]["source"] == "data_default":
+        amendments.append({
+            "key": "audience_leadership",
+            "label": "Set audience: Leadership",
+            "field": "audience",
+            "value": "Leadership",
+            "appendText": " for leadership",
+            "effect": "Makes the decision-pack audience explicit.",
+        })
+    if not fields.get("dimension") and options.get("dimension"):
+        value = options["dimension"][0]
+        amendments.append({
+            "key": "dimension_primary",
+            "label": f"Compare by {value.lower()}",
+            "field": "dimension",
+            "value": value,
+            "appendText": f" by {value.lower()}",
+            "effect": "Makes the comparison axis explicit.",
+        })
+    if len(amendments) < 3 and states["desiredOutput"]["source"] == "data_default":
+        amendments.append({
+            "key": "output_pack",
+            "label": "Ask for decision pack",
+            "field": "desiredOutput",
+            "value": "Decision pack",
+            "appendText": " as a decision pack",
+            "effect": "Makes the requested artifact explicit.",
+        })
+    return amendments[:3]
 
 
 def _ask_suggested_chips(analysis_id: str) -> dict[str, list[str]]:
@@ -1094,6 +1218,23 @@ def _pack_title(answer: SQLAgentAnswer) -> str:
 
 
 def _audit_payload(answer: SQLAgentAnswer, quality: QualityReport) -> dict[str, Any]:
+    if answer.system_error is not None:
+        return {
+            "required": True,
+            "reason": answer.system_error.message,
+            "whatHappened": [
+                "The live agent chain stopped before producing SQL evidence.",
+                f"{answer.system_error.error_class}: {answer.system_error.message}",
+                "The portal blocks this result from becoming an executive slide until the runtime issue is fixed and validation is rerun.",
+            ],
+            "nextActions": [
+                answer.system_error.suggested_action,
+                "Set OPENAI_API_KEY in the runtime environment if this is an auth/configuration error.",
+                "Rerun validation after the LLM client is available.",
+            ],
+            "unresolvedQuestions": quality.layer_c.unresolved_questions,
+            "systemError": answer.system_error.model_dump(mode="json"),
+        }
     if answer.question_id != AUDIT_ID:
         return {"required": False, "reason": None, "nextActions": []}
     return {

@@ -64,6 +64,40 @@ def test_email_draft_is_copyable_professional_text() -> None:
     assert "source" in data["body"].lower()
 
 
+def test_llm_runtime_status_does_not_expose_secret() -> None:
+    response = client.get("/api/runtime/llm")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "model" in data
+    assert "available" in data
+    assert "sk-" not in "".join(str(value) for value in data.values())
+    assert "api_key" not in data
+    assert data["provider"] == "openai-native"
+
+
+def test_runtime_status_flags_legacy_openrouter_config(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-legacy")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+    response = client.get("/api/runtime/llm")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["available"] is False
+    assert data["legacyOpenRouterDetected"] is True
+    assert "OpenRouter" in data["message"]
+
+
+def test_openrouter_style_openai_model_is_normalized(monkeypatch) -> None:
+    from trust_analytics.config import load_settings
+
+    monkeypatch.setenv("OPENAI_MODEL", "openai/gpt-4o-mini")
+
+    assert load_settings().openai_model == "gpt-4o-mini"
+
+
 def test_question_shape_matches_clear_asset_class_question() -> None:
     response = client.post(
         "/api/question/shape",
@@ -100,7 +134,7 @@ def test_question_shape_honors_explicitly_cleared_dimension() -> None:
     assert {"key": "dimension", "label": "Comparison dimension"} in data["missingFields"]
 
 
-def test_question_shape_marks_audience_and_output_missing_when_not_supplied() -> None:
+def test_question_shape_defaults_audience_and_output_when_not_supplied() -> None:
     response = client.post(
         "/api/question/shape",
         json={
@@ -110,12 +144,27 @@ def test_question_shape_marks_audience_and_output_missing_when_not_supplied() ->
     assert response.status_code == 200
     data = response.json()
 
-    assert data["fieldStates"]["audience"]["status"] == "missing"
-    assert data["fieldStates"]["desiredOutput"]["status"] == "missing"
-    assert data["fields"]["audience"] == ""
-    assert data["fields"]["desiredOutput"] == ""
-    assert data["quality"]["ready"] is False
-    assert data["quality"]["score"] <= 67
+    assert data["fieldStates"]["audience"]["status"] == "defaulted"
+    assert data["fieldStates"]["desiredOutput"]["status"] == "defaulted"
+    assert data["fieldStates"]["audience"]["source"] == "data_default"
+    assert data["fields"]["audience"] == "Leadership"
+    assert data["fields"]["desiredOutput"] == "Decision pack"
+    assert data["quality"]["ready"] is True
+    assert data["criticalMissingFields"] == []
+
+
+def test_question_shape_returns_smart_amendments_and_data_grounded_options() -> None:
+    response = client.post(
+        "/api/question/shape",
+        json={"question_text": "Which asset class should we prioritise for growth?"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    labels = [item["label"] for item in data["smartAmendments"]]
+    assert "Add period: October 2025" in labels
+    assert "Crypto" in data["dataGroundedOptions"]["segment"]
+    assert "GTV by asset class" in data["dataGroundedOptions"]["metric"]
 
 
 def test_question_shape_flags_missing_period() -> None:
@@ -213,6 +262,45 @@ def test_run_session_blocks_for_inline_clarification() -> None:
     assert {"key": "period", "label": "Time period"} in [
         {"key": item["key"], "label": item["label"]} for item in data["clarificationNeeds"]
     ]
+
+
+def test_run_session_accepts_free_question_with_default_packaging(monkeypatch) -> None:
+    def _fake_run_and_persist_analysis(**kwargs):
+        assert kwargs["fields"]["audience"] == "Leadership"
+        assert kwargs["fields"]["desiredOutput"] == "Decision pack"
+        return {
+            "id": "adhoc_defaulted",
+            "status": {"label": "Ready to use", "tone": "ready"},
+            "rows": [{"metric": "gtv_idr", "value": 1}],
+            "analystEvidence": {"sql": "SELECT 1"},
+        }
+
+    monkeypatch.setattr(api_module, "run_and_persist_analysis", _fake_run_and_persist_analysis)
+    response = client.post(
+        "/api/runs",
+        json={
+            "question_text": "What was total GTV by asset class in October 2025?",
+            "fields": {
+                "period": "October 2025",
+                "segment": "Completed trading activity",
+                "dimension": "Asset class",
+                "businessObjective": "Prioritise the next growth focus",
+            },
+        },
+    )
+    assert response.status_code == 200
+    run = response.json()
+    assert run["status"] == "running"
+
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        status = client.get(f"/api/runs/{run['id']}").json()
+        if status["status"] == "completed":
+            break
+        sleep(0.02)
+
+    assert status["status"] == "completed"
+    assert {"key": "pack", "label": "Open decision pack", "route": "/analysis/adhoc_defaulted"} in status["nextActions"]
 
 
 def test_run_session_completes_with_packable_result(monkeypatch) -> None:
