@@ -239,6 +239,50 @@ def test_run_session_completes_with_packable_result(monkeypatch) -> None:
     assert result.json()["id"] == "adhoc_validated"
 
 
+def test_run_session_advances_stages_in_order(monkeypatch) -> None:
+    def _fake_run_and_persist_analysis(**_kwargs):
+        return {
+            "id": "adhoc_ordered",
+            "status": {"label": "Ready to use", "tone": "ready"},
+            "rows": [{"metric": "gtv_idr", "value": 1}],
+            "analystEvidence": {"sql": "SELECT 1"},
+        }
+
+    monkeypatch.setattr(api_module, "run_and_persist_analysis", _fake_run_and_persist_analysis)
+    monkeypatch.setattr(api_module, "STAGE_TICK_SECONDS", 0.0)
+    response = client.post(
+        "/api/runs",
+        json={
+            "question_text": "What was total GTV by asset class in October 2025?",
+            "fields": {
+                "period": "October 2025",
+                "segment": "Completed trading activity",
+                "dimension": "Asset class",
+                "audience": "Leadership",
+                "desiredOutput": "Decision pack",
+                "businessObjective": "Prioritise the next growth focus",
+            },
+        },
+    )
+    assert response.status_code == 200
+    run = response.json()
+
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        status = client.get(f"/api/runs/{run['id']}").json()
+        if status["status"] == "completed":
+            break
+        sleep(0.02)
+
+    assert status["status"] == "completed"
+    stages = status["stages"]
+    assert [stage["state"] for stage in stages] == ["done"] * 6
+    expected_keys = ["shape", "plan", "sql", "preflight", "qa", "project"]
+    assert [stage["key"] for stage in stages] == expected_keys
+    durations = [stage["durationMs"] for stage in stages[1:]]
+    assert all(d is not None and d >= 0 for d in durations)
+
+
 def test_admin_costs_empty_state(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("trust_analytics.telemetry.RUN_LOG_PATH", tmp_path / "missing.jsonl")
     response = client.get("/api/admin/costs")

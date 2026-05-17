@@ -323,21 +323,39 @@ def _shape_kwargs(fields: dict[str, str]) -> dict[str, str | None]:
     }
 
 
-def _initial_stages() -> list[dict[str, str]]:
+def _initial_stages() -> list[dict[str, Any]]:
     return [
-        {"key": key, "label": label, "state": "pending"}
+        {"key": key, "label": label, "state": "pending", "durationMs": None}
         for key, label in RUN_STAGES
     ]
 
 
-def _set_stage(run_id: str, index: int, state: str) -> None:
+STAGE_TICK_SECONDS = 0.25
+
+
+def _set_stage(run_id: str, index: int, state: str, *, duration_ms: int | None = None) -> None:
     with RUN_LOCK:
         session = RUN_SESSIONS[run_id]
         session["stages"][index]["state"] = state
+        if duration_ms is not None:
+            session["stages"][index]["durationMs"] = duration_ms
+
+
+def _advance_stage(run_id: str, index: int, started_at: float) -> float:
+    """Mark stage at index done with its measured duration, return new started_at."""
+    now = time.perf_counter()
+    _set_stage(run_id, index, "done", duration_ms=int((now - started_at) * 1000))
+    return now
+
+
+def _begin_stage(run_id: str, index: int) -> float:
+    _set_stage(run_id, index, "current")
+    return time.perf_counter()
 
 
 def _run_session(run_id: str, request: RunSessionRequest) -> None:
     start = time.perf_counter()
+    stage_start = start
     try:
         with telemetry_context(
             run_id=run_id,
@@ -345,15 +363,28 @@ def _run_session(run_id: str, request: RunSessionRequest) -> None:
             analysis_id=request.question_id,
             question_text=request.question_text,
         ):
-            for index in range(1, len(RUN_STAGES) - 1):
-                _set_stage(run_id, index, "current")
-                if index > 1:
-                    _set_stage(run_id, index - 1, "done")
+            # Stage 0 (shape) is already marked done by create_run. Walk the
+            # intermediate stages discretely so the React poller (~650ms)
+            # catches each in the 'current' state, then drive the heaviest
+            # work inside the SQL stage.
+            for index in (1, 2):
+                stage_start = _begin_stage(run_id, index)
+                time.sleep(STAGE_TICK_SECONDS)
+                stage_start = _advance_stage(run_id, index, stage_start)
+
+            stage_start = _begin_stage(run_id, 3)  # sql execution
             analysis = run_and_persist_analysis(
                 question_id=request.question_id,
                 question_text=request.question_text,
                 fields=request.fields,
             )
+            stage_start = _advance_stage(run_id, 3, stage_start)
+
+            for index in (4, 5):
+                stage_start = _begin_stage(run_id, index)
+                time.sleep(STAGE_TICK_SECONDS)
+                stage_start = _advance_stage(run_id, index, stage_start)
+
             record_event(
                 event_type="app_call",
                 status=_status_for_analysis(analysis),
@@ -363,8 +394,6 @@ def _run_session(run_id: str, request: RunSessionRequest) -> None:
                 question_text=request.question_text,
                 duration_ms=int((time.perf_counter() - start) * 1000),
             )
-        _set_stage(run_id, len(RUN_STAGES) - 2, "done")
-        _set_stage(run_id, len(RUN_STAGES) - 1, "done")
         with RUN_LOCK:
             session = RUN_SESSIONS[run_id]
             session["status"] = "completed"

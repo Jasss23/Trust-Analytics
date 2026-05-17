@@ -629,7 +629,7 @@ function RunTimeline({ run, shape }) {
       ]).map(stage => h("div", { className: `stage-row ${stage.state}`, key: stage.label },
         h("span", null),
         h("strong", null, stage.label),
-        h("em", null, stage.state)
+        h("em", null, stage.state === "done" && stage.durationMs != null ? ms(stage.durationMs) : stage.state)
       ))
     )
   );
