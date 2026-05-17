@@ -915,7 +915,7 @@ function AnalysisPage({ id }) {
       h("p", null, analysis.recommendedUse),
       h(FlowSteps, { steps: analysis.workflowSteps || [] }),
       h("div", { className: "action-stack" },
-        ACTIONS.map(action => h(ActionButton, {
+        ACTIONS.filter(a => a.key !== "review").map(action => h(ActionButton, {
           key: action.key,
           action,
           analysis,
@@ -925,6 +925,14 @@ function AnalysisPage({ id }) {
           onCopy: copySummary,
           onEmail: () => setDraftOpen(true)
         }))
+      ),
+      h("a", { className: "primary-wide build-cta", href: `/api/analysis/${analysis.id}/deck.pptx`, onClick: () => setGenerated(true) },
+        h(Icon, { name: generated ? "check" : "presentation" }),
+        generated ? "Pack downloaded" : "Build decision pack"
+      ),
+      h("button", { className: "secondary-wide", onClick: () => navigate(`/review/${analysis.id}`) },
+        h(Icon, { name: "shield" }),
+        "Open evidence room"
       )
     )
   },
