@@ -1177,7 +1177,10 @@ function HandoffPage({ id }) {
     h("section", { className: "subpage-hero blocked" },
       h("div", null,
         h("span", { className: "kicker" }, "Audit brief"),
-        h("h1", null, "Decision blocked until source conflict is resolved"),
+        h("div", { className: "audit-hero-row" },
+          h("h1", null, "Decision blocked until source conflict is resolved"),
+          h("span", { className: "audit-chip" }, h(Icon, { name: "warning" }), "Audit required")
+        ),
         h("p", null, audit.reason || analysis.status.description)
       )
     ),
