@@ -3664,9 +3664,40 @@ pre {
   color: #fff;
 }
 
-/* V1: Ask greeting */
+/* V1 + Z2: Ask greeting + start-over reset */
 .ask-greeting {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
   margin: 4px 0 24px;
+}
+
+.reset-link {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  margin-top: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.reset-link:hover {
+  background: var(--soft);
+  border-color: #b6c6d8;
+  color: var(--ink);
+}
+
+.reset-link svg {
+  height: 13px;
+  width: 13px;
 }
 
 .ask-greeting h1 {

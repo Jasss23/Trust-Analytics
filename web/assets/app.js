@@ -292,7 +292,19 @@ function AskWorkspace() {
       h(FlowRail, { shape, run, ready }),
       h("div", { className: "ask-main" },
         h("section", { className: "ask-greeting" },
-          h("h1", null, "Hi Jiashun, what business question can I help with today?")
+          h("h1", null, "Hi Jiashun, what business question can I help with today?"),
+          (question !== DEFAULT_QUESTION || Object.keys(fields).length > 0 || run) ? h("button", {
+            className: "reset-link",
+            type: "button",
+            onClick: () => {
+              setQuestion("");
+              setFields({});
+              setRun(null);
+            }
+          },
+            h(Icon, { name: "close" }),
+            "Start over"
+          ) : null
         ),
         h("label", { className: "command-card" },
           h("span", { className: "sr-label" }, "Business question"),
