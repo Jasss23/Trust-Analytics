@@ -70,7 +70,7 @@ RUN_SESSIONS: dict[str, dict[str, Any]] = {}
 RUN_LOCK = threading.Lock()
 
 
-app = FastAPI(title="Trust Analytics Portal", version="0.1.0")
+app = FastAPI(title="Trust Analytics Portal", version="1.0.0")
 
 
 @app.get("/api/health")
