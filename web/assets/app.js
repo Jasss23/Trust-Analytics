@@ -447,10 +447,48 @@ function FlowRail({ shape, run, ready }) {
   else if (run?.status === "running") currentStep = 2;
   else if (ready) currentStep = 2;
   else if (shape && Object.values(shape.fieldStates || {}).some(state => state.status && state.status !== "missing")) currentStep = 1;
+  const goToStep = step => {
+    if (step === 0) {
+      const input = document.querySelector(".command-input");
+      input?.focus();
+      document.querySelector(".command-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } else if (step === 1) {
+      document.querySelector(".field-stack")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (step === 2) {
+      const btn = document.querySelector(".build-cta");
+      if (btn) {
+        btn.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (ready) btn.focus();
+      }
+    } else if (step === 3) {
+      if (run?.status === "completed" && run?.resultId) {
+        navigate(`/analysis/${run.resultId}`);
+      }
+    }
+  };
+  const stepEnabled = step => {
+    if (step <= currentStep) return true;
+    if (step === currentStep + 1) return true;
+    return false;
+  };
   return h("aside", { className: "flow-rail" },
     items.map((item, index) => {
       const state = index < currentStep ? "done" : index === currentStep ? "active" : "pending";
-      return h("div", { className: `rail-step ${state}`, key: item[0] },
+      const enabled = stepEnabled(index);
+      const hint = index === 3 && state !== "done"
+        ? "Available after Validate"
+        : state === "done"
+          ? `Jump back to ${item[0]}`
+          : `Go to ${item[0]}`;
+      return h("button", {
+        type: "button",
+        className: `rail-step ${state}`,
+        key: item[0],
+        title: hint,
+        "aria-current": state === "active" ? "step" : null,
+        disabled: !enabled,
+        onClick: () => enabled && goToStep(index),
+      },
         h("span", { className: "rail-number" },
           state === "done" ? h(Icon, { name: "check" }) : String(index + 1)
         ),

@@ -3533,31 +3533,60 @@ pre {
   width: 100%;
 }
 
-/* V6 + X4: Dynamic flow rail states, vertical fill */
+/* V6 + X4 + Y2: Dynamic flow rail with clickable navigation */
 .copilot-workspace .flow-rail {
-  align-self: stretch;
+  align-self: start;
   background: transparent;
   border: 0;
   border-radius: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 8px 12px 8px 0;
+  padding: 10px 12px 0 0;
 }
 
 .copilot-workspace .flow-rail .rail-step {
-  flex: 1 0 auto;
-  margin: 0;
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  flex: 0 0 auto;
+  gap: 13px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  margin: 0 0 4px;
+  min-height: 0;
+  padding: 6px 8px 28px;
   position: relative;
+  text-align: left;
+  transition: background 140ms ease;
+  width: 100%;
+}
+
+.copilot-workspace .flow-rail .rail-step:hover:not(:disabled) {
+  background: var(--soft);
+  transform: none;
+}
+
+.copilot-workspace .flow-rail .rail-step:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.copilot-workspace .flow-rail .rail-step:last-child {
+  padding-bottom: 8px;
 }
 
 .copilot-workspace .flow-rail .rail-step::after {
   background: var(--line);
-  bottom: 12px;
+  bottom: 6px;
   content: "";
-  left: 17px;
+  left: 25px;
   position: absolute;
-  top: 50px;
+  top: 48px;
   transition: background 200ms ease;
   width: 1px;
 }
