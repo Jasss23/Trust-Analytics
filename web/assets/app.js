@@ -296,7 +296,7 @@ function AskWorkspace() {
 
   return h(React.Fragment, null,
     h("section", { className: "copilot-workspace" },
-      h(FlowRail),
+      h(FlowRail, { shape, run, ready }),
       h("div", { className: "ask-main" },
         h("section", { className: "ask-greeting" },
           h("h1", null, "Hi Jiashun — what decision do you want to make today?"),
@@ -439,21 +439,31 @@ function AskWorkspace() {
   );
 }
 
-function FlowRail() {
+function FlowRail({ shape, run, ready }) {
   const items = [
-    ["1", "Ask", "Refine the business question"],
-    ["2", "Shape", "Add context and constraints"],
-    ["3", "Validate", "Check logic and data quality"],
-    ["4", "Package", "Build decision pack"],
+    ["Ask", "Refine the business question"],
+    ["Shape", "Confirm context and constraints"],
+    ["Validate", "Check logic and data quality"],
+    ["Package", "Build decision pack"],
   ];
+  let currentStep = 0;
+  if (run?.status === "completed") currentStep = 3;
+  else if (run?.status === "running") currentStep = 2;
+  else if (ready) currentStep = 2;
+  else if (shape && Object.values(shape.fieldStates || {}).some(state => state.status && state.status !== "missing")) currentStep = 1;
   return h("aside", { className: "flow-rail" },
-    items.map((item, index) => h("div", { className: index === 0 ? "rail-step active" : "rail-step", key: item[1] },
-      h("span", { className: "rail-number" }, item[0]),
-      h("span", null,
-        h("strong", null, item[1]),
-        h("small", null, item[2])
-      )
-    ))
+    items.map((item, index) => {
+      const state = index < currentStep ? "done" : index === currentStep ? "active" : "pending";
+      return h("div", { className: `rail-step ${state}`, key: item[0] },
+        h("span", { className: "rail-number" },
+          state === "done" ? h(Icon, { name: "check" }) : String(index + 1)
+        ),
+        h("span", null,
+          h("strong", null, item[0]),
+          h("small", null, item[1])
+        )
+      );
+    })
   );
 }
 

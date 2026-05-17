@@ -3542,6 +3542,84 @@ pre {
   flex: 1 1 auto;
 }
 
+/* V6: Dynamic flow rail states */
+.copilot-workspace .flow-rail {
+  align-self: stretch;
+  background: linear-gradient(180deg, #ffffff 0%, var(--paper) 100%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 460px;
+  padding: 26px 22px;
+}
+
+.copilot-workspace .flow-rail .rail-step {
+  margin-bottom: 28px;
+  position: relative;
+}
+
+.copilot-workspace .flow-rail .rail-step:last-child {
+  margin-bottom: 0;
+}
+
+.copilot-workspace .flow-rail .rail-step::after {
+  background: var(--line);
+  content: "";
+  height: 38px;
+  left: 17px;
+  position: absolute;
+  top: 44px;
+  transition: background 200ms ease;
+  width: 1px;
+}
+
+.copilot-workspace .flow-rail .rail-step:last-child::after {
+  display: none;
+}
+
+.copilot-workspace .flow-rail .rail-step.done::after {
+  background: var(--blue);
+}
+
+.copilot-workspace .flow-rail .rail-step.done .rail-number {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.copilot-workspace .flow-rail .rail-step.done .rail-number svg {
+  height: 16px;
+  width: 16px;
+}
+
+.copilot-workspace .flow-rail .rail-step.done strong,
+.copilot-workspace .flow-rail .rail-step.active strong {
+  color: var(--ink);
+}
+
+.copilot-workspace .flow-rail .rail-step.pending strong {
+  color: #94a0b3;
+}
+
+.copilot-workspace .flow-rail .rail-step.pending .rail-number {
+  background: #fff;
+  border-color: var(--line);
+  color: #94a0b3;
+}
+
+.copilot-workspace .flow-rail .rail-step.pending small {
+  color: #98a4b6;
+}
+
+.copilot-workspace .flow-rail .rail-step.active .rail-number {
+  background: var(--blue);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(13, 99, 206, 0.16);
+  color: #fff;
+}
+
 /* V1: Ask greeting */
 .ask-greeting {
   margin: 4px 0 24px;
