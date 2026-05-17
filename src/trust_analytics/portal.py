@@ -16,11 +16,19 @@ from trust_analytics.data_loader import load_csvs
 from trust_analytics.llm import make_client
 from trust_analytics.metadata import case_root_from_data_dir, load_dbt_metadata
 from trust_analytics.metrics import load_metrics_registry
-from trust_analytics.models import PipelineItem, QualityReport, ReviewMode, SQLAgentAnswer
-from trust_analytics.questions import get_question, synthesize_business_question
-from trust_analytics.workflow import run_pipeline
+from trust_analytics.models import (
+    BusinessQuestion,
+    PipelineItem,
+    PipelineResult,
+    QualityReport,
+    ReviewMode,
+    SQLAgentAnswer,
+)
+from trust_analytics.questions import REQUIRED_QUESTIONS, get_question, synthesize_business_question
+from trust_analytics.workflow import run_pipeline, write_pipeline_outputs
 
 CACHE_DIR = Path("outputs/sample")
+ASK_RUNS_DIR = Path("outputs/ask")
 HERO_ID = "q1_gtv_idr_by_asset_oct_2025"
 AUDIT_ID = "q5_gtv_mom_trend_oct_dec_2025"
 MTU_ID = "q3_mtu_oct_2025"
@@ -43,25 +51,21 @@ class CachedArtifacts:
 
 
 def demo_questions() -> list[dict[str, str]]:
+    copy = {
+        HERO_ID: "Which asset class should we prioritise for next month's growth plan?",
+        "q2_gtv_usd_oct_2025": "Can we use October GTV in USD for the leadership snapshot?",
+        MTU_ID: "How many monthly transacting users did the platform have?",
+        "q4_transaction_count_by_asset_oct_2025": "Which asset class drove the most October transaction activity?",
+        AUDIT_ID: "Can we use the monthly summary for the quarter-end GTV trend?",
+    }
     return [
         {
-            "id": HERO_ID,
-            "text": "Which asset class should we prioritise for next month's growth plan?",
-            "metric": "GTV by asset class",
-            "period": "October 2025",
-        },
-        {
-            "id": AUDIT_ID,
-            "text": "Can we use the monthly summary for the quarter-end GTV trend?",
-            "metric": "GTV month-on-month trend",
-            "period": "October to December 2025",
-        },
-        {
-            "id": MTU_ID,
-            "text": "How many monthly transacting users did the platform have?",
-            "metric": "Monthly transacting users",
-            "period": "October 2025",
-        },
+            "id": question.id,
+            "text": copy.get(question.id, question.text),
+            "metric": _metric_label(question.metric),
+            "period": question.period,
+        }
+        for question in REQUIRED_QUESTIONS
     ]
 
 
@@ -78,24 +82,92 @@ def load_cached_artifacts(cache_dir: Path = CACHE_DIR) -> CachedArtifacts:
     return CachedArtifacts(answers=answers, quality_reports=quality, plans=plans)
 
 
-def cached_analysis(analysis_id: str, *, live_error: str | None = None) -> dict[str, Any]:
-    artifacts = load_cached_artifacts()
+def _artifact_dirs() -> list[tuple[Path, str]]:
+    dirs: list[tuple[Path, str]] = []
+    if CACHE_DIR.exists():
+        dirs.append((CACHE_DIR, "seed"))
+    if ASK_RUNS_DIR.exists():
+        for path in sorted(ASK_RUNS_DIR.iterdir()):
+            if path.is_dir() and (path / "sql_agent_answers.json").exists():
+                dirs.append((path, "ask"))
+    return dirs
+
+
+def _analysis_from_dir(
+    analysis_id: str,
+    artifact_dir: Path,
+    *,
+    source_kind: str,
+    live_error: str | None = None,
+) -> dict[str, Any] | None:
+    artifacts = load_cached_artifacts(artifact_dir)
     for answer, quality, plan in zip(
         artifacts.answers, artifacts.quality_reports, artifacts.plans, strict=True
     ):
         if answer.question_id == analysis_id:
-            return project_analysis(
+            analysis = project_analysis(
                 answer=answer,
                 quality=quality,
                 question_plan=plan,
-                from_cache=True,
+                from_cache=source_kind == "seed",
                 live_error=live_error,
             )
+            analysis["librarySource"] = source_kind
+            analysis["artifactDir"] = str(artifact_dir)
+            return analysis
+    return None
+
+
+def cached_analysis(analysis_id: str, *, live_error: str | None = None) -> dict[str, Any]:
+    for artifact_dir, source_kind in _artifact_dirs():
+        analysis = _analysis_from_dir(
+            analysis_id,
+            artifact_dir,
+            source_kind=source_kind,
+            live_error=live_error,
+        )
+        if analysis is not None:
+            return analysis
     raise KeyError(f"No cached analysis found for {analysis_id}")
 
 
 def list_cached_analyses() -> list[dict[str, Any]]:
     return [cached_analysis(q["id"]) for q in demo_questions()]
+
+
+def list_library_items() -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for artifact_dir, source_kind in _artifact_dirs():
+        try:
+            artifacts = load_cached_artifacts(artifact_dir)
+        except FileNotFoundError:
+            continue
+        for answer, quality, plan in zip(
+            artifacts.answers, artifacts.quality_reports, artifacts.plans, strict=True
+        ):
+            analysis = project_analysis(
+                answer=answer,
+                quality=quality,
+                question_plan=plan,
+                from_cache=source_kind == "seed",
+            )
+            analysis["librarySource"] = source_kind
+            analysis["artifactDir"] = str(artifact_dir)
+            items.append(
+                {
+                    "id": analysis["id"],
+                    "source": source_kind,
+                    "question": analysis["question"],
+                    "metricName": analysis["metricName"],
+                    "period": analysis["period"],
+                    "status": analysis["status"],
+                    "headline": analysis["headline"],
+                    "decisionPack": analysis["decisionPack"],
+                    "audit": analysis["audit"],
+                    "artifactDir": str(artifact_dir),
+                }
+            )
+    return items
 
 
 def shape_question(
@@ -108,12 +180,7 @@ def shape_question(
     audience: str | None = None,
     desired_output: str | None = None,
 ) -> dict[str, Any]:
-    """Shape a messy business question into a reliable demo analysis path.
-
-    This is intentionally deterministic for the public demo. It uses the
-    existing question synthesis helpers for metric/period inference, then maps
-    the shaped question to the nearest verified cached analysis.
-    """
+    """Shape a messy business question into confirmable guided fields."""
     text = (question_text or "").strip()
     if not text:
         text = "Which asset class should we prioritise for next month's growth plan?"
@@ -155,22 +222,49 @@ def shape_question(
         audience=audience,
         desired_output=desired_output,
     )
+    field_states = _field_states(
+        inferred=inferred,
+        explicit=explicit,
+        provided={
+            "businessObjective": business_objective,
+            "period": period,
+            "segment": segment,
+            "dimension": dimension,
+            "audience": audience,
+            "desiredOutput": desired_output,
+        },
+    )
     missing = [
         {"key": key, "label": ASK_FIELD_LABELS[key]}
         for key in ASK_FIELD_LABELS
-        if not explicit[key]
+        if field_states[key]["status"] == "missing"
     ]
     ready_count = len(ASK_FIELD_LABELS) - len(missing)
     score = round(ready_count / len(ASK_FIELD_LABELS) * 100)
+    blockers = [
+        {
+            "key": key,
+            "label": ASK_FIELD_LABELS[key],
+            "message": (
+                f"Confirm {ASK_FIELD_LABELS[key].lower()} before validation, or make the "
+                "question explicit enough for the agent to infer it."
+            ),
+        }
+        for key, state in field_states.items()
+        if state["status"] in {"missing", "inferred"}
+    ]
+    ready = not blockers
     return {
         "input": text,
         "canonicalQuestion": _canonical_question(analysis, inferred),
         "inferredMetric": analysis["metricName"],
-        "inferredPeriod": inferred["period"] or analysis["period"],
+        "inferredPeriod": inferred["period"],
         "inferredDimension": inferred["dimension"],
         "fields": inferred,
+        "fieldStates": field_states,
         "confirmedFields": explicit,
         "missingFields": missing,
+        "clarificationNeeds": blockers,
         "suggestedChips": _ask_suggested_chips(match["id"]),
         "recommendedAnalysisId": match["id"],
         "recommendedAnalysisTitle": analysis["decisionPack"]["title"],
@@ -183,14 +277,34 @@ def shape_question(
         "confidence": match["confidence"],
         "quality": {
             "score": score,
-            "label": "Ready to build" if not missing else "Needs shaping",
-            "ready": not missing,
+            "label": "Ready to validate" if ready else "Needs confirmation",
+            "ready": ready,
         },
         "explanation": (
-            f"Matched to a verified {analysis['metricName']} path so the demo can "
-            "run live first and fall back to a known-good evidence pack."
+            "The agent inferred the guided fields it can. Confirm or fill the "
+            "remaining fields before running live validation."
         ),
     }
+
+
+def run_live_pipeline(
+    *,
+    question_id: str | None = None,
+    question_text: str | None = None,
+    fields: dict[str, str] | None = None,
+    settings: Settings | None = None,
+) -> PipelineResult:
+    settings = settings or load_settings()
+    if not settings.db_path.exists():
+        load_csvs(settings.data_dir, settings.db_path)
+
+    question = _question_for_run(question_id=question_id, question_text=question_text, fields=fields)
+    metadata = load_dbt_metadata(case_root_from_data_dir(settings.data_dir))
+    registry = load_metrics_registry()
+    llm = make_client(settings)
+    sql_agent = SQLAgent(settings.db_path, metadata, llm, registry)
+    quality_agent = QualityAgent(settings.db_path, registry, llm)
+    return run_pipeline([question], sql_agent, quality_agent, ReviewMode.DEMO_APPROVE)
 
 
 def run_live_analysis(
@@ -199,21 +313,36 @@ def run_live_analysis(
     question_text: str | None = None,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
-    settings = settings or load_settings()
-    if not settings.db_path.exists():
-        load_csvs(settings.data_dir, settings.db_path)
-
-    question = get_question(question_id) if question_id else synthesize_business_question(
-        question_text or demo_questions()[0]["text"],
+    result = run_live_pipeline(
+        question_id=question_id,
+        question_text=question_text,
+        settings=settings,
     )
-    metadata = load_dbt_metadata(case_root_from_data_dir(settings.data_dir))
-    registry = load_metrics_registry()
-    llm = make_client(settings)
-    sql_agent = SQLAgent(settings.db_path, metadata, llm, registry)
-    quality_agent = QualityAgent(settings.db_path, registry, llm)
-    result = run_pipeline([question], sql_agent, quality_agent, ReviewMode.DEMO_APPROVE)
     item = result.items[0]
     return project_item(item, from_cache=False)
+
+
+def run_and_persist_analysis(
+    *,
+    question_id: str | None = None,
+    question_text: str | None = None,
+    fields: dict[str, str] | None = None,
+    output_root: Path = ASK_RUNS_DIR,
+    settings: Settings | None = None,
+) -> dict[str, Any]:
+    result = run_live_pipeline(
+        question_id=question_id,
+        question_text=question_text,
+        fields=fields,
+        settings=settings,
+    )
+    item = result.items[0]
+    analysis = project_item(item, from_cache=False)
+    out = output_root / item.question.id
+    write_pipeline_outputs(result, out)
+    analysis["artifactDir"] = str(out)
+    analysis["librarySource"] = "ask"
+    return analysis
 
 
 def run_or_cache(
@@ -261,6 +390,59 @@ def _match_verified_analysis(text: str) -> dict[str, str]:
     return {"id": analysis_id, "reason": reason, "confidence": confidence}
 
 
+def _metric_label(metric: str) -> str:
+    labels = {
+        "gtv_idr_by_asset_class": "GTV by asset class",
+        "total_gtv_usd": "Total GTV in USD",
+        "monthly_transacting_users": "Monthly transacting users",
+        "transaction_count_by_asset_class": "Transaction count by asset class",
+        "gtv_idr_month_on_month_trend": "GTV month-on-month trend",
+    }
+    return labels.get(metric, metric.replace("_", " ").title())
+
+
+def _field_states(
+    *,
+    inferred: dict[str, str],
+    explicit: dict[str, bool],
+    provided: dict[str, str | None],
+) -> dict[str, dict[str, str | bool]]:
+    states: dict[str, dict[str, str | bool]] = {}
+    for key, label in ASK_FIELD_LABELS.items():
+        value = inferred.get(key) or ""
+        user_value = (provided.get(key) or "").strip()
+        if user_value and user_value != value:
+            status = "manual_override"
+        elif explicit.get(key):
+            status = "confirmed"
+        elif value:
+            status = "inferred"
+        else:
+            status = "missing"
+        states[key] = {
+            "label": label,
+            "value": value,
+            "status": status,
+            "confirmed": status in {"confirmed", "manual_override"},
+        }
+    return states
+
+
+def _question_for_run(
+    *,
+    question_id: str | None,
+    question_text: str | None,
+    fields: dict[str, str] | None,
+) -> BusinessQuestion:
+    if question_id:
+        return get_question(question_id)
+    text = (question_text or "").strip()
+    if not text:
+        raise ValueError("Question text must be non-empty.")
+    period = (fields or {}).get("period") or None
+    return synthesize_business_question(text, period_override=period)
+
+
 def _infer_ask_fields(
     *,
     text: str,
@@ -289,15 +471,12 @@ def _infer_ask_fields(
     selected_segment = segment or ""
     selected_dimension = dimension or ""
     if analysis["id"] == HERO_ID:
-        selected_period = selected_period or "October 2025"
         selected_segment = selected_segment or "Completed trading activity"
         selected_dimension = selected_dimension or "Asset class"
     elif analysis["id"] == AUDIT_ID:
-        selected_period = selected_period or "October to December 2025"
         selected_segment = selected_segment or "Completed GTV"
         selected_dimension = selected_dimension or "Month"
     elif analysis["id"] == MTU_ID:
-        selected_period = selected_period or "October 2025"
         selected_segment = selected_segment or "Transacting users"
         selected_dimension = selected_dimension or ""
 
@@ -346,10 +525,11 @@ def _explicit_ask_fields(
 
 
 def _canonical_question(analysis: dict[str, Any], fields: dict[str, str]) -> str:
+    period = fields["period"] or "the selected period"
     if analysis["id"] == HERO_ID:
         return (
             f"Which {fields['dimension'].lower()} should we prioritise in "
-            f"{fields['period']} for the {fields['audience'].lower()} decision pack?"
+            f"{period} for the {fields['audience'].lower()} decision pack?"
         )
     if analysis["id"] == AUDIT_ID:
         return f"Can we use the {fields['period']} GTV trend for leadership reporting?"

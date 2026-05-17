@@ -38,8 +38,17 @@ the result is decision-ready, and can generate a one-slide leadership brief.
 ```bash
 bash setup.sh
 # Edit .env and set OPENAI_API_KEY for live runs.
+
+source .venv/bin/activate
 trust-analytics setup
 uvicorn trust_analytics.api:app --reload --port 8080
+```
+
+If you do not activate the virtualenv, use the explicit binaries instead:
+
+```bash
+.venv/bin/trust-analytics setup
+.venv/bin/uvicorn trust_analytics.api:app --reload --port 8080
 ```
 
 Open [http://localhost:8080](http://localhost:8080).
@@ -50,6 +59,7 @@ and verified cached outputs under `outputs/sample/`.
 ## CLI
 
 ```bash
+source .venv/bin/activate
 trust-analytics setup
 trust-analytics run --review-mode demo-approve
 trust-analytics ask "What was total GTV by asset class in October 2025?" --no-review

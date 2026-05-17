@@ -44,11 +44,24 @@ async function api(path, options) {
   return res.json();
 }
 
+function shapePayload(question, fields) {
+  return {
+    question_text: question,
+    business_objective: fields.businessObjective,
+    period: fields.period,
+    segment: fields.segment,
+    dimension: fields.dimension,
+    audience: fields.audience,
+    desired_output: fields.desiredOutput,
+  };
+}
+
 function App() {
   const path = usePath();
   if (path.startsWith("/review/")) return h(Layout, { active: "review" }, h(ReviewPage, { id: path.split("/").pop() }));
   if (path.startsWith("/handoff/")) return h(Layout, { active: "handoff" }, h(HandoffPage, { id: path.split("/").pop() }));
   if (path.startsWith("/analysis/")) return h(Layout, { active: "analysis" }, h(AnalysisPage, { id: path.split("/").pop() }));
+  if (path.startsWith("/library")) return h(Layout, { active: "library" }, h(LibraryPage));
   return h(Layout, { active: "ask" }, h(AskWorkspace));
 }
 
@@ -64,7 +77,7 @@ function Layout({ active, children }) {
           )
         ),
         h("span", { className: "brand-divider" }),
-        h("button", { className: "workspace-switch", type: "button" },
+        h("button", { className: "workspace-switch", type: "button", onClick: () => navigate("/") },
           "Ask workspace",
           h(Icon, { name: "chevron" })
         ),
@@ -73,6 +86,7 @@ function Layout({ active, children }) {
       h("div", { className: "topbar-right" },
         h("nav", { className: "nav" },
           h(NavLink, { active: active === "ask", href: "/" }, "Ask"),
+          h(NavLink, { active: active === "library", href: "/library" }, "Library"),
           h(NavLink, { active: active === "analysis", href: `/analysis/${HERO_ID}` }, "Build pack"),
           h(NavLink, { active: active === "review", href: `/review/${HERO_ID}` }, "Evidence room")
         ),
@@ -139,16 +153,17 @@ function Status({ status, showDescription = false }) {
 function AskWorkspace() {
   const [question, setQuestion] = React.useState(DEFAULT_QUESTION);
   const [fields, setFields] = React.useState({
-    business_objective: "Prioritise the next growth focus",
-    period: "October 2025",
-    segment: "Completed trading activity",
+    businessObjective: "",
+    period: "",
+    segment: "",
     dimension: "",
     audience: "",
-    desired_output: "",
+    desiredOutput: "",
   });
   const [shape, setShape] = React.useState(null);
   const [analyses, setAnalyses] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  const [run, setRun] = React.useState(null);
 
   React.useEffect(() => { api("/api/analyses").then(setAnalyses); }, []);
   React.useEffect(() => {
@@ -158,7 +173,7 @@ function AskWorkspace() {
       api("/api/question/shape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question_text: question, ...fields })
+        body: JSON.stringify(shapePayload(question, fields))
       }).then(data => {
         if (!cancelled) setShape(data);
       }).finally(() => {
@@ -171,20 +186,50 @@ function AskWorkspace() {
     };
   }, [question, JSON.stringify(fields)]);
 
+  React.useEffect(() => {
+    if (!run || run.status !== "running") return;
+    const timer = setInterval(() => {
+      api(`/api/runs/${run.id}`).then(data => {
+        setRun(data);
+        if (data.status === "completed" && data.resultId) {
+          clearInterval(timer);
+          navigate(`/analysis/${data.resultId}`);
+        }
+        if (data.status === "failed" || data.status === "needs_clarification") {
+          clearInterval(timer);
+        }
+      }).catch(() => clearInterval(timer));
+    }, 650);
+    return () => clearInterval(timer);
+  }, [run?.id, run?.status]);
+
   const setField = (key, value) => setFields(current => ({ ...current, [key]: value }));
-  const buildPack = () => navigate(`/analysis/${shape?.recommendedAnalysisId || HERO_ID}`);
+  const confirmField = key => {
+    const value = shape?.fields?.[key];
+    if (value) setField(key, value);
+  };
+  const validate = async () => {
+    const data = await api("/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question_text: question, fields })
+    });
+    setRun(data);
+  };
   const suggestions = [
-    ["target", "Focus on growth priority", () => setField("business_objective", "Prioritise the next growth focus")],
-    ["warning", "Add source caveat", () => setField("desired_output", "Decision pack with source caveat")],
+    ["target", "Focus on growth priority", () => setField("businessObjective", "Prioritise the next growth focus")],
+    ["warning", "Add source caveat", () => setField("desiredOutput", "Decision pack with source caveat")],
     ["table", "Compare by asset class", () => setField("dimension", "Asset class")],
-    ["search", "Show me similar analyses", () => navigate(`/review/${shape?.recommendedAnalysisId || HERO_ID}`)],
+    ["search", "Show examples", () => navigate("/library")],
   ];
-  const objectiveValue = fields.business_objective || shape?.fields?.businessObjective || "";
+  const objectiveValue = fields.businessObjective || shape?.fields?.businessObjective || "";
   const periodValue = fields.period || shape?.fields?.period || "";
   const segmentValue = fields.segment || shape?.fields?.segment || "";
-  const dimensionValue = fields.dimension || "";
-  const audienceValue = fields.audience || "";
-  const outputValue = fields.desired_output || "";
+  const dimensionValue = fields.dimension || shape?.fields?.dimension || "";
+  const audienceValue = fields.audience || shape?.fields?.audience || "";
+  const outputValue = fields.desiredOutput || shape?.fields?.desiredOutput || "";
+  const states = shape?.fieldStates || {};
+  const ready = Boolean(shape?.quality?.ready) && run?.status !== "running";
 
   return h(React.Fragment, null,
     h("section", { className: "copilot-workspace" },
@@ -195,7 +240,7 @@ function AskWorkspace() {
             h("span", { className: "kicker" }, "Ask"),
             h("h1", null, "Ask a business question")
           ),
-          h("button", { className: "ghost-button" }, h(Icon, { name: "search" }), "Examples")
+          h("button", { className: "ghost-button", onClick: () => navigate("/library") }, h(Icon, { name: "search" }), "Examples")
         ),
         h("label", { className: "command-card" },
           h("span", { className: "sr-label" }, "Business question"),
@@ -208,8 +253,8 @@ function AskWorkspace() {
           }),
           h("div", { className: "command-footer" },
             h("span", { className: "copilot-state" }, h(Icon, { name: "check" }), "AI copilot active"),
-            h("span", { className: "shape-state" }, loading ? "Shaping question..." : "Suggestions based on trusted data"),
-            h("button", { type: "button", className: "send-button", onClick: e => { e.preventDefault(); buildPack(); } }, h(Icon, { name: "arrow" }))
+            h("span", { className: "shape-state" }, loading ? "Shaping question..." : "Confirm inferred fields, then validate live"),
+            h("button", { type: "button", className: "send-button", disabled: !ready, onClick: e => { e.preventDefault(); validate(); } }, h(Icon, { name: "arrow" }))
           )
         ),
         h("div", { className: "suggestion-row" },
@@ -225,8 +270,11 @@ function AskWorkspace() {
             mode: "select",
             value: objectiveValue,
             placeholder: "Select business objective",
-            onPick: v => setField("business_objective", v),
-            onClear: () => setField("business_objective", "")
+            options: shape?.suggestedChips?.businessObjective || [],
+            state: states.businessObjective,
+            onConfirm: () => confirmField("businessObjective"),
+            onPick: v => setField("businessObjective", v),
+            onClear: () => setField("businessObjective", "")
           }),
           h(FieldRow, {
             icon: "calendar",
@@ -234,6 +282,8 @@ function AskWorkspace() {
             mode: "segmented",
             value: periodValue,
             options: ["Last 30 days", "Last 90 days", "Current quarter", periodValue || "October 2025"],
+            state: states.period,
+            onConfirm: () => confirmField("period"),
             onPick: v => setField("period", v)
           }),
           h(FieldRow, {
@@ -241,7 +291,10 @@ function AskWorkspace() {
             label: "Object / segment",
             mode: "tokens",
             value: segmentValue,
+            options: shape?.suggestedChips?.segment || [],
             tokens: [segmentValue || "Completed trading activity"],
+            state: states.segment,
+            onConfirm: () => confirmField("segment"),
             onClear: () => setField("segment", ""),
             onPick: v => setField("segment", v)
           })
@@ -256,6 +309,8 @@ function AskWorkspace() {
               value: dimensionValue,
               placeholder: "Select dimension (e.g., region, industry, product)",
               options: shape?.suggestedChips?.dimension || [],
+              state: states.dimension,
+              onConfirm: () => confirmField("dimension"),
               onPick: v => setField("dimension", v)
             }),
             h(FieldRow, {
@@ -265,6 +320,8 @@ function AskWorkspace() {
               value: audienceValue,
               placeholder: "Select decision audience",
               options: shape?.suggestedChips?.audience || [],
+              state: states.audience,
+              onConfirm: () => confirmField("audience"),
               onPick: v => setField("audience", v)
             }),
             h(FieldRow, {
@@ -274,19 +331,21 @@ function AskWorkspace() {
               value: outputValue,
               placeholder: "Select output format (e.g., deck, report, extract)",
               options: shape?.suggestedChips?.desiredOutput || [],
-              onPick: v => setField("desired_output", v)
+              state: states.desiredOutput,
+              onConfirm: () => confirmField("desiredOutput"),
+              onPick: v => setField("desiredOutput", v)
             })
           )
         ),
         h("div", { className: "verified-bar" },
           h("span", { className: "verified-icon" }, h(Icon, { name: "database" })),
-          h("strong", null, "Recommended path:"),
-          h("span", null, "Verified SQL analysis"),
+          h("strong", null, "Comparable example:"),
+          h("span", null, shape?.recommendedAnalysisTitle || "Verified SQL analysis"),
           h("i", null),
           h("span", null, "Accounts warehouse"),
           h("i", null),
           h("span", null, "CRM + product usage"),
-          h("button", { className: "bar-chevron", type: "button" }, h(Icon, { name: "chevron" }))
+          h("button", { className: "bar-chevron", type: "button", onClick: () => navigate("/library") }, h(Icon, { name: "chevron" }))
         )
       ),
       h("aside", { className: "inspector-panel" },
@@ -302,10 +361,11 @@ function AskWorkspace() {
             ["Verified joins", "PII-safe", "Reusable"].map(item => h("span", { key: item }, item))
           )
         ),
+        h(RunTimeline, { run, shape }),
         h(ArtifactPreview, { shape }),
-        h("button", { className: "primary-wide build-cta", onClick: buildPack },
+        h("button", { className: "primary-wide build-cta", disabled: !ready, onClick: validate },
           h(Icon, { name: "presentation" }),
-          "Build decision pack"
+          run?.status === "running" ? "Validating live run..." : "Validate analysis"
         ),
         h("button", { className: "secondary-wide", onClick: () => navigate(`/review/${shape?.recommendedAnalysisId || HERO_ID}`) },
           h(Icon, { name: "shield" }),
@@ -317,7 +377,7 @@ function AskWorkspace() {
       h("div", { className: "section-heading" },
         h("div", null,
           h("span", { className: "kicker" }, "Verified paths"),
-          h("h2", null, "Reliable demo routes when live analysis needs a fallback")
+          h("h2", null, "Seed cases and successful validated asks live in Library")
         )
       ),
       h("div", { className: "path-grid" },
@@ -345,16 +405,33 @@ function FlowRail() {
   );
 }
 
-function FieldRow({ icon, label, mode = "select", value, placeholder, options = [], tokens = [], onPick, onClear }) {
+function FieldRow({ icon, label, mode = "select", value, placeholder, options = [], tokens = [], state, onPick, onClear, onConfirm }) {
   const displayValue = value || placeholder || "Not set";
   const uniqueOptions = Array.from(new Set(options.filter(Boolean)));
+  const status = state?.status || (value ? "confirmed" : "missing");
+  const visibleOptions = uniqueOptions.filter(option => option !== value).slice(0, 4);
   return h("div", { className: "field-row" },
     h("div", { className: "field-label" },
       h(Icon, { name: icon || "target" }),
       h("span", null, label),
       h(Icon, { name: "info" })
     ),
-    h(FieldControl, { mode, value, displayValue, options: uniqueOptions, tokens, onPick, onClear })
+    h("div", { className: "field-control-wrap" },
+      h(FieldControl, { mode, value, displayValue, options: uniqueOptions, tokens, onPick, onClear }),
+      visibleOptions.length ? h("div", { className: "inline-options visible" },
+        visibleOptions.map(option => h("button", {
+          type: "button",
+          key: option,
+          className: "chip",
+          onClick: () => onPick(option)
+        }, option))
+      ) : null,
+      h("div", { className: `field-state ${status}` },
+        h("span", null, status.replace("_", " ")),
+        status === "inferred" ? h("button", { type: "button", onClick: onConfirm }, "Confirm") : null,
+        status === "missing" ? h("small", null, "Add it here or make the question more explicit.") : null
+      )
+    )
   );
 }
 
@@ -368,11 +445,11 @@ function FieldControl({ mode, value, displayValue, options, tokens, onPick, onCl
         onClick: () => onPick(segment),
         type: "button"
       }, segment)),
-      h("button", { className: "calendar-button", type: "button" }, h(Icon, { name: "calendar" }))
+      h("button", { className: "calendar-button", type: "button", onClick: () => onPick(value || "October 2025") }, h(Icon, { name: "calendar" }))
     );
   }
   if (mode === "tokens") {
-    return h("button", { className: "token-control", type: "button", onClick: () => onPick(tokens[0]) },
+    return h("button", { className: "token-control", type: "button", onClick: () => onPick(options[0] || tokens[0]) },
       h("span", { className: "token-list" },
         tokens.filter(Boolean).slice(0, 3).map(token => h("span", { className: "input-token", key: token },
           token,
@@ -398,7 +475,7 @@ function FieldControl({ mode, value, displayValue, options, tokens, onPick, onCl
       ) : null
     );
   }
-  return h("button", { className: "select-control", type: "button", onClick: () => onPick(value || displayValue) },
+  return h("button", { className: "select-control", type: "button", onClick: () => onPick(options[0] || value || displayValue) },
     h(Icon, { name: "target" }),
     h("span", { className: value ? "" : "placeholder" }, displayValue),
     value ? h("span", { className: "clear-control", onClick: e => { e.stopPropagation(); onClear?.(); } }, h(Icon, { name: "close" })) : null,
@@ -408,12 +485,12 @@ function FieldControl({ mode, value, displayValue, options, tokens, onPick, onCl
 
 function QuestionQuality({ shape, loading }) {
   const rows = [
-    ["Business objective", shape?.confirmedFields?.businessObjective],
-    ["Time period", shape?.confirmedFields?.period],
-    ["Object / segment", shape?.confirmedFields?.segment],
-    ["Decision audience", shape?.confirmedFields?.audience],
-    ["Output format", shape?.confirmedFields?.desiredOutput],
-    ["Evidence trace", true],
+    ["Business objective", shape?.fieldStates?.businessObjective?.status],
+    ["Time period", shape?.fieldStates?.period?.status],
+    ["Object / segment", shape?.fieldStates?.segment?.status],
+    ["Comparison dimension", shape?.fieldStates?.dimension?.status],
+    ["Decision audience", shape?.fieldStates?.audience?.status],
+    ["Output format", shape?.fieldStates?.desiredOutput?.status],
   ];
   return h("div", { className: "inspector-section quality-section" },
     h("div", { className: "section-minihead" },
@@ -425,10 +502,41 @@ function QuestionQuality({ shape, loading }) {
       h("p", null, shape?.canonicalQuestion || "The portal will infer the safest verified analysis path.")
     ),
     h("div", { className: "quality-list" },
-      rows.map(([label, ok]) => h("div", { className: ok ? "quality-row ok" : "quality-row warn", key: label },
+      rows.map(([label, status]) => {
+        const ok = status && status !== "missing";
+        return h("div", { className: ok ? "quality-row ok" : "quality-row warn", key: label },
         h(Icon, { name: ok ? "check" : "warning" }),
         h("span", null, label),
-        h("em", null, ok ? "Ready" : "Missing")
+        h("em", null, ok ? String(status).replace("_", " ") : "Missing")
+      );
+      })
+    )
+  );
+}
+
+function RunTimeline({ run, shape }) {
+  const needs = run?.clarificationNeeds?.length ? run.clarificationNeeds : shape?.clarificationNeeds || [];
+  return h("div", { className: "inspector-section run-section" },
+    h("div", { className: "section-minihead" },
+      h("span", { className: "kicker" }, "Validate"),
+      h("span", { className: "status-mini" }, run?.status || shape?.quality?.label || "Ready")
+    ),
+    needs.length ? h("div", { className: "clarify-list" },
+      needs.map(item => h("p", { key: item.key }, h(Icon, { name: "warning" }), item.message || `${item.label} is required.`))
+    ) : null,
+    run?.error ? h("p", { className: "run-error" }, `${run.error.type}: ${run.error.message}`) : null,
+    h("div", { className: "stage-list" },
+      (run?.stages || [
+        { label: "Question shaping", state: shape?.quality?.ready ? "done" : "current" },
+        { label: "Planner/source derivation", state: "pending" },
+        { label: "SQL execution", state: "pending" },
+        { label: "Pre-flight checks", state: "pending" },
+        { label: "QA reconciliation", state: "pending" },
+        { label: "Pack projection", state: "pending" },
+      ]).map(stage => h("div", { className: `stage-row ${stage.state}`, key: stage.label },
+        h("span", null),
+        h("strong", null, stage.label),
+        h("em", null, stage.state)
       ))
     )
   );
@@ -488,6 +596,61 @@ function VerifiedPathCard({ analysis, selected }) {
   );
 }
 
+function LibraryPage() {
+  const [items, setItems] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    api("/api/library").then(setItems).finally(() => setLoading(false));
+  }, []);
+  if (loading) return h(LoadingPanel, { label: "Opening success library..." });
+  const seed = items.filter(item => item.source === "seed");
+  const ask = items.filter(item => item.source === "ask");
+  return h(React.Fragment, null,
+    h("section", { className: "subpage-hero library-hero" },
+      h("div", null,
+        h("span", { className: "kicker" }, "Library"),
+        h("h1", null, "Successful analyses and seed demo stories."),
+        h("p", null, "Open a decision pack first, then drill into evidence when an analyst needs to challenge the result.")
+      ),
+      h("button", { onClick: () => navigate("/") }, h(Icon, { name: "arrow" }), "Ask new question")
+    ),
+    h(LibrarySection, { title: "Seed demo stories", items: seed }),
+    h(LibrarySection, { title: "Validated free asks", items: ask, empty: "Validated free Ask runs will appear here after a live run succeeds." })
+  );
+}
+
+function LibrarySection({ title, items, empty }) {
+  return h("section", { className: "library-section" },
+    h("div", { className: "section-heading" },
+      h("div", null,
+        h("span", { className: "kicker" }, `${items.length} cases`),
+        h("h2", null, title)
+      )
+    ),
+    items.length ? h("div", { className: "library-grid" },
+      items.map(item => h(LibraryCard, { key: `${item.source}-${item.id}`, item }))
+    ) : h("div", { className: "empty-library" }, empty || "No cases yet.")
+  );
+}
+
+function LibraryCard({ item }) {
+  const route = `/analysis/${item.id}`;
+  return h("article", { className: "library-card" },
+    h("div", { className: "path-card-top" },
+      h(Status, { status: item.status }),
+      h("span", { className: "status-mini" }, item.source === "seed" ? "Seed" : "Ask")
+    ),
+    h("h3", null, item.decisionPack?.title || item.metricName),
+    h("p", { className: "question-line small" }, item.question),
+    h("p", null, item.headline),
+    item.status?.label === "Audit required" ? h("p", { className: "audit-label" }, "Outputs are available with audit-required labeling.") : null,
+    h("div", { className: "library-actions" },
+      h("button", { onClick: () => navigate(route) }, "Open pack", h(Icon, { name: "arrow" })),
+      h("button", { className: "secondary", onClick: () => navigate(`/review/${item.id}`) }, "Evidence")
+    )
+  );
+}
+
 function FlowSteps({ steps = [] }) {
   return h("div", { className: "flow-steps compact" },
     steps.map((step, index) => h("button", {
@@ -512,11 +675,6 @@ function AnalysisPage({ id }) {
   React.useEffect(() => {
     setAnalysis(null);
     api(`/api/analysis/${id}`).then(setAnalysis);
-    api("/api/analysis/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question_id: id })
-    }).then(setAnalysis).catch(() => {});
   }, [id]);
   if (!analysis) return h(LoadingPanel, { label: "Preparing decision pack..." });
 
@@ -537,6 +695,7 @@ function AnalysisPage({ id }) {
           )
         ),
         analysis.fromCache && analysis.liveError ? h("p", { className: "cache-note" }, `Showing nearest verified analysis path. ${analysis.liveError}`) : null,
+        analysis.status?.label === "Audit required" ? h("p", { className: "cache-note audit" }, "Audit required: exports remain available, but every output must carry this caveat and evidence appendix.") : null,
         h("section", { className: "decision-summary", id: "assess" },
           h("span", { className: "kicker" }, "Decision summary"),
           h("p", { className: "question-line" }, analysis.question),
