@@ -301,6 +301,10 @@ function AskWorkspace() {
     h("section", { className: "copilot-workspace" },
       h(FlowRail),
       h("div", { className: "ask-main" },
+        h("section", { className: "ask-greeting" },
+          h("h1", null, "Hi Jiashun — what decision do you want to make today?"),
+          h("p", null, "Type your business question in plain language. The agent will shape it into a verifiable analysis, run the SQL, and package a leadership-ready decision pack.")
+        ),
         h("label", { className: "command-card" },
           h("span", { className: "sr-label" }, "Business question"),
           h("textarea", {
@@ -407,16 +411,6 @@ function AskWorkspace() {
             })
           )
         ),
-        h("div", { className: "verified-bar" },
-          h("span", { className: "verified-icon" }, h(Icon, { name: "database" })),
-          h("strong", null, "Comparable example:"),
-          h("span", null, shape?.recommendedAnalysisTitle || "Verified SQL analysis"),
-          h("i", null),
-          h("span", null, "Accounts warehouse"),
-          h("i", null),
-          h("span", null, "CRM + product usage"),
-          h("button", { className: "bar-chevron", type: "button", onClick: () => navigate("/library") }, h(Icon, { name: "chevron" }))
-        )
       ),
       h("aside", { className: "inspector-panel" },
         h(QuestionQuality, { shape, loading }),

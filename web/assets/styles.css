@@ -3424,6 +3424,29 @@ pre {
   color: var(--amber);
 }
 
+/* V1: Ask greeting */
+.ask-greeting {
+  margin: 4px 0 24px;
+}
+
+.ask-greeting h1 {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+  margin: 0;
+  max-width: 760px;
+}
+
+.ask-greeting p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 8px 0 0;
+  max-width: 720px;
+}
+
 /* U3: Field dropdown + calendar popover */
 .field-row {
   position: relative;
