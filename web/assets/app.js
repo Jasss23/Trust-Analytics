@@ -152,10 +152,10 @@ function Layout({ active, children }) {
 
 function HelpDrawer({ onClose }) {
   const steps = [
-    ["Ask", "Type a messy business question; the agent shapes it into guided fields."],
-    ["Shape", "Confirm or override inferred objective, time period, segment, and audience."],
-    ["Validate", "The pipeline runs read-only SQL, source reconciliation, and QA, with a verified-cache fallback."],
-    ["Package", "Export the decision pack: PPT, CSV, executive summary, and evidence appendix."],
+    ["Ask", "Write the business question."],
+    ["Shape", "Confirm the context."],
+    ["Validate", "Run SQL and quality checks."],
+    ["Package", "Share the decision pack."],
   ];
   return h("aside", { className: "drawer help-drawer" },
     h("div", { className: "drawer-head" },
@@ -165,7 +165,7 @@ function HelpDrawer({ onClose }) {
       ),
       h("button", { className: "icon-button", onClick: onClose, title: "Close" }, h(Icon, { name: "close" }))
     ),
-    h("p", { className: "muted" }, "Every analysis traces back to verified SQL and lives behind a clear status (Ready / Use with context / Audit required)."),
+    h("p", { className: "muted" }, "Each answer carries a status, source, and evidence trail."),
     h("ol", { className: "help-steps" },
       steps.map(([title, body], idx) => h("li", { key: title },
         h("span", { className: "help-step-num" }, String(idx + 1).padStart(2, "0")),
@@ -175,7 +175,7 @@ function HelpDrawer({ onClose }) {
         )
       ))
     ),
-    h("p", { className: "muted help-foot" }, "Tip: open the Library to see seed cases. The Evidence room exposes SQL, source comparison, and QA layers when an analyst needs to challenge a result.")
+    h("p", { className: "muted help-foot" }, "Use Evidence when a result needs review.")
   );
 }
 
@@ -1204,7 +1204,7 @@ function LibraryPage() {
   React.useEffect(() => {
     api("/api/library").then(setItems).finally(() => setLoading(false));
   }, []);
-  if (loading) return h(LoadingPanel, { label: "Opening success library..." });
+  if (loading) return h(LoadingPanel, { label: "Opening library..." });
   const seed = items.filter(item => item.source === "seed");
   const ask = items.filter(item => item.source === "ask");
   return h(SubpageWorkspace, {
@@ -1212,30 +1212,30 @@ function LibraryPage() {
     inspector: [
       h(InspectorCard, {
         key: "quality",
-        kicker: "Library quality",
+        kicker: "Library",
         title: `${items.length} reusable cases`,
-        body: "Seed stories stay separate from the Ask workspace, while successful free asks can graduate here.",
-        badges: ["5 seed demos", "Evidence linked", "Pack first"]
+        body: "Saved analyses with packs and evidence.",
+        badges: ["Reusable", "Evidence linked", "Pack ready"]
       }),
       h(InspectorCard, {
         key: "handoff",
-        kicker: "Reviewer path",
+        kicker: "Review",
         title: "Open pack, then evidence",
-        body: "Business owners see the pack first. Analysts can drill into SQL, source comparison, QA, and challenge notes.",
-        badges: ["BD-safe", "Analyst detail"]
+        body: "Start with the answer. Drill in when needed.",
+        badges: ["SQL", "Sources"]
       })
     ]
   },
     h("section", { className: "subpage-hero library-hero" },
       h("div", null,
         h("span", { className: "kicker" }, "Library"),
-        h("h1", null, "Successful analyses and seed demo stories"),
-        h("p", null, "Open a decision pack first, then drill into evidence when an analyst needs to challenge the result.")
+        h("h1", null, "Saved analyses"),
+        h("p", null, "Open the pack. Review evidence when needed.")
       ),
       h("button", { onClick: () => navigate("/") }, h(Icon, { name: "arrow" }), "Ask new question")
     ),
-    h(LibrarySection, { title: "Seed demo stories", items: seed }),
-    h(LibrarySection, { title: "Validated free asks", items: ask, empty: "Validated free Ask runs will appear here after a live run succeeds." })
+    h(LibrarySection, { title: "Core analyses", items: seed }),
+    h(LibrarySection, { title: "Recent questions", items: ask, empty: "Validated questions will appear here." })
   );
 }
 
@@ -1252,7 +1252,7 @@ function LibrarySection({ title, items, empty }) {
     ) : h("div", { className: "empty-library" },
       h("span", { className: "empty-icon" }, h(Icon, { name: "spark" })),
       h("strong", null, "No validated free asks yet"),
-      h("p", null, empty || "Free Ask runs graduate here once they finish a clean live validation."),
+      h("p", null, empty || "Validated questions will appear here."),
       h("button", { className: "empty-cta", onClick: () => navigate("/") },
         h(Icon, { name: "arrow" }),
         "Validate a question"
@@ -1268,14 +1268,14 @@ function LibraryCard({ item }) {
   return h("article", { className: "library-card" },
     h("div", { className: "path-card-top" },
       h(Status, { status: item.status }),
-      h("span", { className: "library-source-chip" }, item.source === "seed" ? "Seed" : "Ask")
+      h("span", { className: "library-source-chip" }, item.source === "seed" ? "Core" : "Ask")
     ),
     h("h3", null, item.decisionPack?.title || item.metricName),
     h("p", { className: "question-line small" }, item.question),
     h("p", null, item.headline),
     auditRequired ? h("p", { className: "audit-label" },
       h(Icon, { name: "warning" }),
-      "Outputs are available with audit-required labeling."
+      "Use with audit label."
     ) : null,
     h("div", { className: "library-actions" },
       h("button", { onClick: () => navigate(primaryRoute) }, primaryLabel, h(Icon, { name: "arrow" })),
@@ -1304,17 +1304,17 @@ function AdminCostsPage() {
     inspector: [
       h(InspectorCard, {
         key: "admin",
-        kicker: "Admin lens",
-        title: "Demo observability",
-        body: "This is directional cost awareness for API-heavy workflows, not billing-grade accounting.",
-        badges: ["Estimated", "JSONL-backed", "Run-level"]
+        kicker: "Admin",
+        title: "Runtime activity",
+        body: "Latency, tokens, and cost by run.",
+        badges: ["Estimated", "Run-level"]
       }),
       h("div", { key: "pricing", className: "inspector-section artifact-section" },
         h("div", { className: "section-minihead" },
-          h("span", { className: "kicker" }, "Pricing source"),
+          h("span", { className: "kicker" }, "Pricing"),
           h("span", { className: "status-mini" }, "Estimate")
         ),
-        h("p", null, data?.pricing?.source || "Estimated model pricing table"),
+        h("p", null, data?.pricing?.source || "Estimated pricing"),
         h("div", { className: "stage-list" },
           h("div", { className: "stage-row done" }, h("span", null), h("strong", null, "Events captured"), h("em", null, compactNumber(totals.events))),
           h("div", { className: "stage-row current" }, h("span", null), h("strong", null, "LLM calls"), h("em", null, compactNumber(totals.llmCalls))),
@@ -1326,42 +1326,44 @@ function AdminCostsPage() {
     h("section", { className: "subpage-hero admin-hero" },
       h("div", null,
         h("span", { className: "kicker" }, "Admin"),
-        h("h1", null, "Time and token cost telemetry"),
-        h("p", null, "A lightweight admin view of Ask, Validate, Build, export, and LLM stage cost. Dollar values are estimates.")
+        h("h1", null, "Runtime costs"),
+        h("p", null, "Latency, tokens, and estimated spend.")
       ),
       h("button", { onClick: refresh }, h(Icon, { name: "search" }), "Refresh")
     ),
     h("section", { className: "cost-summary-grid" },
       h(CostSummaryCard, { label: "Runs", value: compactNumber(totals.runs), detail: `${compactNumber(totals.events)} events` }),
       h(CostSummaryCard, { label: "LLM calls", value: compactNumber(totals.llmCalls), detail: `${compactNumber(totals.totalTokens)} tokens` }),
-      h(CostSummaryCard, { label: "Estimated cost", value: usd(totals.estimatedCostUsd), detail: "model pricing table" }),
-      h(CostSummaryCard, { label: "Total latency", value: ms(totals.durationMs), detail: "summed event duration" })
+      h(CostSummaryCard, { label: "Estimated cost", value: usd(totals.estimatedCostUsd), detail: "pricing table" }),
+      h(CostSummaryCard, { label: "Total latency", value: ms(totals.durationMs), detail: "all events" })
     ),
     h("section", { className: "cost-table-shell" },
       h("div", { className: "module-head" },
         h("div", null,
           h("span", { className: "kicker" }, "Runs"),
-          h("h2", null, "Past Ask, Validate, Build, and export activity")
+          h("h2", null, "Run history")
         ),
         h("span", { className: "meta" }, data?.pricing?.source || "Estimated pricing")
       ),
-      runs.length ? h("table", { className: "table cost-table" },
-        h("thead", null, h("tr", null,
-          ["Status", "Action", "Question", "Latency", "Tokens", "Est. cost", ""].map(label => h("th", { key: label }, label))
-        )),
-        h("tbody", null, runs.map(run => h("tr", { key: run.runId },
-          h("td", null, h("span", { className: `cost-status ${run.status}` }, run.status)),
-          h("td", null, run.actions?.join(", ") || "event"),
-          h("td", null,
-            h("strong", null, run.analysisId || run.runId),
-            h("small", null, run.questionText || "No question text captured")
-          ),
-          h("td", null, ms(run.durationMs)),
-          h("td", null, compactNumber(run.totalTokens)),
-          h("td", null, usd(run.estimatedCostUsd)),
-          h("td", null, h("button", { className: "secondary", onClick: () => openDetail(run) }, "Details"))
-        )))
-      ) : h("div", { className: "empty-library" }, "No telemetry yet. Ask, validate, build, or export to populate this page.")
+      runs.length ? h("div", { className: "cost-table-scroll" },
+        h("table", { className: "table cost-table" },
+          h("thead", null, h("tr", null,
+            ["Status", "Action", "Question", "Latency", "Tokens", "Est. cost", ""].map(label => h("th", { key: label }, label))
+          )),
+          h("tbody", null, runs.map(run => h("tr", { key: run.runId },
+            h("td", null, h("span", { className: `cost-status ${run.status}` }, run.status)),
+            h("td", null, run.actions?.join(", ") || "event"),
+            h("td", null,
+              h("strong", null, run.analysisId || run.runId),
+              h("small", null, run.questionText || "No question captured")
+            ),
+            h("td", null, ms(run.durationMs)),
+            h("td", null, compactNumber(run.totalTokens)),
+            h("td", null, usd(run.estimatedCostUsd)),
+            h("td", null, h("button", { className: "secondary", onClick: () => openDetail(run) }, "Details"))
+          )))
+        )
+      ) : h("div", { className: "empty-library" }, "No activity yet.")
     ),
     detail ? h(CostDetailDrawer, { detail, onClose: () => setDetail(null) }) : null
   );
@@ -1610,7 +1612,7 @@ function EmailDrawer({ analysis, onClose }) {
       ),
       h("button", { className: "icon-button", onClick: onClose, title: "Close" }, h(Icon, { name: "close" }))
     ),
-    h("p", { className: "muted" }, "Prepared as a concise leadership update. No email is sent from this public demo."),
+    h("p", { className: "muted" }, "Prepared as a concise leadership update."),
     h("textarea", { readOnly: true, value: text }),
     h("button", { className: "primary-wide", onClick: copy }, copied ? "Draft copied" : "Copy draft", h(Icon, { name: copied ? "check" : "copy" }))
   );

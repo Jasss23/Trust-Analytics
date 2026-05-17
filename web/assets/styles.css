@@ -3114,12 +3114,12 @@ button:disabled {
 
 .subpage-hero button {
   align-self: end;
-  background: var(--navy);
-  border-color: var(--navy);
+  background: var(--blue);
+  border-color: var(--blue);
   border-radius: 7px;
-  box-shadow: 0 10px 22px rgba(7, 24, 43, 0.12);
-  min-height: 44px;
-  padding: 0 18px;
+  box-shadow: 0 8px 18px rgba(13, 99, 206, 0.14);
+  min-height: 40px;
+  padding: 0 16px;
 }
 
 .library-section {
@@ -3355,14 +3355,32 @@ pre {
   padding: 20px;
 }
 
-.cost-table {
+.cost-table-scroll {
   margin-top: 18px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.cost-table {
+  margin-top: 0;
+  min-width: 1120px;
+  table-layout: fixed;
+  width: 100%;
 }
 
 .cost-table th:first-child,
 .cost-table td:first-child {
-  min-width: 150px;
-  width: 150px;
+  width: 138px;
+}
+
+.cost-table th:nth-child(2),
+.cost-table td:nth-child(2) {
+  width: 190px;
+}
+
+.cost-table th:nth-child(3),
+.cost-table td:nth-child(3) {
+  width: 430px;
 }
 
 .cost-table th:nth-child(4),
@@ -3373,10 +3391,22 @@ pre {
 .cost-table td:nth-child(6) {
   text-align: right;
   white-space: nowrap;
+  width: 110px;
+}
+
+.cost-table th:last-child,
+.cost-table td:last-child {
+  text-align: right;
+  width: 120px;
 }
 
 .cost-table td strong {
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.cost-table td {
+  vertical-align: top;
 }
 
 .cost-status {
@@ -4245,9 +4275,15 @@ pre {
 }
 
 .library-actions button:first-child {
-  background: var(--navy);
-  border-color: var(--navy);
+  background: var(--blue);
+  border-color: var(--blue);
+  box-shadow: 0 8px 18px rgba(13, 99, 206, 0.14);
   color: #fff;
+}
+
+.library-actions button:first-child:hover {
+  background: #0a56b7;
+  border-color: #0a56b7;
 }
 
 /* A3: topbar Help link, confidence pill, quality tag tightening */

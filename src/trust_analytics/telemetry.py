@@ -15,7 +15,7 @@ from typing import Any
 from trust_analytics.models import UsageRecord
 
 RUN_LOG_PATH = Path("logs/runs.jsonl")
-PRICING_SOURCE = "OpenAI API pricing, checked 2026-05-17"
+PRICING_SOURCE = "OpenAI pricing"
 PRICING_SOURCE_URL = "https://openai.com/api/pricing/"
 
 # Per 1M text tokens. Dollar values are estimates for admin observability,
