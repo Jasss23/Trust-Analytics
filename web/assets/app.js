@@ -466,7 +466,9 @@ function FlowRail({ shape, run, ready }) {
       }
     }
   };
+  const packageReady = run?.status === "completed" && Boolean(run?.resultId);
   const stepEnabled = step => {
+    if (step === 3) return packageReady;
     if (step <= currentStep) return true;
     if (step === currentStep + 1) return true;
     return false;
@@ -480,6 +482,7 @@ function FlowRail({ shape, run, ready }) {
         : state === "done"
           ? `Jump back to ${item[0]}`
           : `Go to ${item[0]}`;
+      const showLockHint = index === 3 && !enabled;
       return h("button", {
         type: "button",
         className: `rail-step ${state}`,
@@ -492,9 +495,13 @@ function FlowRail({ shape, run, ready }) {
         h("span", { className: "rail-number" },
           state === "done" ? h(Icon, { name: "check" }) : String(index + 1)
         ),
-        h("span", null,
+        h("span", { className: "rail-step-copy" },
           h("strong", null, item[0]),
-          h("small", null, item[1])
+          h("small", null, item[1]),
+          showLockHint ? h("span", { className: "rail-lock-hint" },
+            h(Icon, { name: "warning" }),
+            "Validate first"
+          ) : null
         )
       );
     })

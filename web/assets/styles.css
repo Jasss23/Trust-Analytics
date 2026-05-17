@@ -3533,16 +3533,16 @@ pre {
   width: 100%;
 }
 
-/* V6 + X4 + Y2: Dynamic flow rail with clickable navigation */
+/* V6 + X4 + Y2 + Z1: Dynamic flow rail with clickable navigation + right divider */
 .copilot-workspace .flow-rail {
-  align-self: start;
+  align-self: stretch;
   background: transparent;
-  border: 0;
+  border-right: 1px solid var(--line);
   border-radius: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 10px 12px 0 0;
+  padding: 10px 24px 0 0;
 }
 
 .copilot-workspace .flow-rail .rail-step {
@@ -3597,6 +3597,34 @@ pre {
 
 .copilot-workspace .flow-rail .rail-step.done::after {
   background: var(--blue);
+}
+
+.copilot-workspace .flow-rail .rail-step-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.copilot-workspace .flow-rail .rail-lock-hint {
+  align-items: center;
+  align-self: flex-start;
+  background: var(--wash-amber);
+  border-radius: 999px;
+  color: var(--amber);
+  display: inline-flex;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 4px;
+  letter-spacing: 0.06em;
+  margin-top: 6px;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.copilot-workspace .flow-rail .rail-lock-hint svg {
+  height: 11px;
+  width: 11px;
 }
 
 .copilot-workspace .flow-rail .rail-step.done .rail-number {
