@@ -221,6 +221,11 @@ function AskWorkspace() {
   const [run, setRun] = React.useState(null);
 
   React.useEffect(() => {
+    if (!question.trim()) {
+      setShape(null);
+      setLoading(false);
+      return undefined;
+    }
     let cancelled = false;
     setLoading(true);
     const timer = setTimeout(() => {
