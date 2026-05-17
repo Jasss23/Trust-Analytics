@@ -283,6 +283,43 @@ def test_run_session_advances_stages_in_order(monkeypatch) -> None:
     assert all(d is not None and d >= 0 for d in durations)
 
 
+SEED_IDS = [
+    HERO_ID,
+    "q2_gtv_usd_oct_2025",
+    MTU_ID,
+    "q4_transaction_count_by_asset_oct_2025",
+    AUDIT_ID,
+]
+
+
+def test_csv_export_for_each_seed_id() -> None:
+    for analysis_id in SEED_IDS:
+        response = client.get(f"/api/analysis/{analysis_id}/export.csv")
+        assert response.status_code == 200, analysis_id
+        body = response.text
+        assert body, f"empty CSV body for {analysis_id}"
+        lines = [line for line in body.splitlines() if line.strip()]
+        assert lines, f"CSV had no non-blank lines for {analysis_id}"
+
+
+def test_pptx_export_for_each_seed_id() -> None:
+    for analysis_id in SEED_IDS:
+        response = client.get(f"/api/analysis/{analysis_id}/deck.pptx")
+        assert response.status_code == 200, analysis_id
+        with zipfile.ZipFile(BytesIO(response.content)) as zf:
+            slide_files = [name for name in zf.namelist() if name.startswith("ppt/slides/slide")]
+            assert len(slide_files) >= 2, f"{analysis_id} missing main+appendix slides"
+
+
+def test_email_draft_for_each_seed_id() -> None:
+    for analysis_id in SEED_IDS:
+        response = client.post(f"/api/analysis/{analysis_id}/email-draft")
+        assert response.status_code == 200, analysis_id
+        payload = response.json()
+        assert payload["subject"], f"{analysis_id} missing email subject"
+        assert payload["body"], f"{analysis_id} missing email body"
+
+
 def test_admin_costs_empty_state(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("trust_analytics.telemetry.RUN_LOG_PATH", tmp_path / "missing.jsonl")
     response = client.get("/api/admin/costs")

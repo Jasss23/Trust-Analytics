@@ -699,7 +699,7 @@ def make_pptx(analysis: dict[str, Any]) -> bytes:
     _boundary_box(slide, analysis, Inches(0.72), Inches(4.78), Inches(5.45), Inches(1.12))
 
     _textbox(slide, Inches(6.7), Inches(1.92), Inches(5.8), Inches(0.35), "Evidence-backed result", 13, RGBColor(15, 23, 42), bold=True)
-    _draw_bar_chart(slide, analysis["chart"], Inches(6.7), Inches(2.38), Inches(5.65), Inches(3.34))
+    _draw_chart_panel(slide, analysis["chart"], Inches(6.7), Inches(2.38), Inches(5.65), Inches(3.34))
     _textbox(slide, Inches(6.7), Inches(5.92), Inches(5.6), Inches(0.42), analysis.get("chartInsight") or "", 11, RGBColor(71, 85, 105))
     _textbox(slide, Inches(0.72), Inches(6.55), Inches(11.8), Inches(0.28), "Generated from read-only SQL, source reconciliation, and analyst evidence. Appendix included for challenge.", 9, RGBColor(100, 116, 139))
 
@@ -792,16 +792,30 @@ def _pill(slide, left, top, text):
     tf.paragraphs[0].runs[0].font.color.rgb = RGBColor(28, 97, 76)
 
 
+def _draw_chart_panel(slide, chart, left, top, width, height):
+    """Route the chart payload to the right renderer based on chart.type."""
+    chart_type = chart.get("type") or "bar"
+    values = chart.get("values") or []
+    if chart_type == "table" or not values:
+        _draw_table_panel(slide, chart, left, top, width, height)
+    else:
+        _draw_bar_chart(slide, chart, left, top, width, height)
+
+
 def _draw_bar_chart(slide, chart, left, top, width, height):
     from pptx.dml.color import RGBColor
     from pptx.util import Inches
 
     labels = chart.get("labels") or []
     values = chart.get("values") or []
-    max_value = max(values) if values else 1
-    bar_h = height / max(len(values), 1) * 0.45
-    gap = height / max(len(values), 1) * 0.55
-    for idx, (label, value) in enumerate(zip(labels, values, strict=True)):
+    if not values:
+        return
+    paired = list(zip(labels, values, strict=False))
+    max_value = max(values)
+    rows = max(len(paired), 1)
+    bar_h = height / rows * 0.45
+    gap = height / rows * 0.55
+    for idx, (label, value) in enumerate(paired):
         y = top + idx * (bar_h + gap)
         _textbox(slide, left, y, Inches(1.2), bar_h, str(label).title(), 10, RGBColor(69, 75, 89), bold=True)
         bar_w = width * 0.68 * (float(value) / max_value)
@@ -810,6 +824,21 @@ def _draw_bar_chart(slide, chart, left, top, width, height):
         bar.fill.fore_color.rgb = RGBColor(34, 92, 130)
         bar.line.color.rgb = RGBColor(34, 92, 130)
         _textbox(slide, left + Inches(1.45) + bar_w, y, Inches(1.2), bar_h, _compact_money(value), 9, RGBColor(31, 41, 55))
+
+
+def _draw_table_panel(slide, chart, left, top, width, height):
+    from pptx.dml.color import RGBColor
+    from pptx.util import Inches
+
+    labels = chart.get("labels") or []
+    if not labels:
+        _textbox(slide, left, top, width, Inches(0.4), "Tabular result", 12, RGBColor(71, 85, 105), bold=True)
+        return
+    _textbox(slide, left, top, width, Inches(0.36), "Tabular result", 10, RGBColor(71, 85, 105), bold=True)
+    row_h = Inches(0.36)
+    for idx, label in enumerate(labels[:8]):
+        y = top + Inches(0.5) + idx * row_h
+        _textbox(slide, left, y, width, row_h, f"- {label}", 11, RGBColor(31, 41, 55))
 
 
 def _business_status(answer: SQLAgentAnswer, quality: QualityReport) -> dict[str, str]:
