@@ -521,27 +521,94 @@ const FIELD_HINTS = {
   "Desired output": "The artifact you want produced — deck, brief, extract, or audit report.",
 };
 
+const CALENDAR_PRESETS = [
+  "August 2025",
+  "September 2025",
+  "October 2025",
+  "November 2025",
+  "December 2025",
+  "Q3 2025",
+  "Q4 2025",
+  "October to December 2025",
+];
+
+function useClickOutside(ref, onOutside) {
+  React.useEffect(() => {
+    const handler = event => {
+      if (ref.current && !ref.current.contains(event.target)) onOutside();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ref, onOutside]);
+}
+
 function FieldRow({ icon, label, mode = "select", value, placeholder, options = [], tokens = [], state, onPick, onClear, onConfirm }) {
   const displayValue = value || placeholder || "Not set";
   const uniqueOptions = Array.from(new Set(options.filter(Boolean)));
   const status = state?.status || (value ? "confirmed" : "missing");
-  const visibleOptions = uniqueOptions.filter(option => option !== value).slice(0, 4);
   const hint = FIELD_HINTS[label] || `Help the agent infer ${label.toLowerCase()}.`;
-  return h("div", { className: "field-row" },
+  const [open, setOpen] = React.useState(false);
+  const [calendarOpen, setCalendarOpen] = React.useState(false);
+  const wrapRef = React.useRef(null);
+  useClickOutside(wrapRef, () => {
+    if (open) setOpen(false);
+    if (calendarOpen) setCalendarOpen(false);
+  });
+  const pickAndClose = option => {
+    onPick(option);
+    setOpen(false);
+    setCalendarOpen(false);
+  };
+  const toggleDropdown = () => {
+    setCalendarOpen(false);
+    setOpen(current => !current);
+  };
+  const toggleCalendar = () => {
+    setOpen(false);
+    setCalendarOpen(current => !current);
+  };
+  const popoverOptions = mode === "segmented" ? CALENDAR_PRESETS : uniqueOptions;
+  return h("div", { className: "field-row", ref: wrapRef },
     h("div", { className: "field-label" },
       h(Icon, { name: icon || "target" }),
       h("span", null, label),
       h("span", { className: "field-hint", title: hint, "aria-label": hint }, h(Icon, { name: "info" }))
     ),
     h("div", { className: "field-control-wrap" },
-      h(FieldControl, { mode, value, displayValue, options: uniqueOptions, tokens, onPick, onClear }),
-      visibleOptions.length ? h("div", { className: "inline-options visible" },
-        visibleOptions.map(option => h("button", {
-          type: "button",
-          key: option,
-          className: "chip",
-          onClick: () => onPick(option)
-        }, option))
+      h(FieldControl, {
+        mode,
+        value,
+        displayValue,
+        options: uniqueOptions,
+        tokens,
+        onPick: pickAndClose,
+        onClear,
+        onToggleDropdown: toggleDropdown,
+        onToggleCalendar: toggleCalendar,
+        dropdownOpen: open,
+        calendarOpen,
+      }),
+      open && popoverOptions.length ? h("div", { className: "field-popover" },
+        h("div", { className: "field-popover-head" }, "Choose ", label.toLowerCase()),
+        h("div", { className: "field-popover-list" },
+          popoverOptions.map(option => h("button", {
+            type: "button",
+            key: option,
+            className: option === value ? "popover-option selected" : "popover-option",
+            onClick: () => pickAndClose(option),
+          }, option, option === value ? h(Icon, { name: "check" }) : null))
+        )
+      ) : null,
+      calendarOpen && mode === "segmented" ? h("div", { className: "field-popover field-popover-calendar" },
+        h("div", { className: "field-popover-head" }, "Custom time period"),
+        h("div", { className: "field-popover-list" },
+          CALENDAR_PRESETS.map(option => h("button", {
+            type: "button",
+            key: option,
+            className: option === value ? "popover-option selected" : "popover-option",
+            onClick: () => pickAndClose(option),
+          }, option, option === value ? h(Icon, { name: "check" }) : null))
+        )
       ) : null,
       h("div", { className: `field-state ${status}` },
         h("span", null, status.replace("_", " ")),
@@ -552,7 +619,7 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
   );
 }
 
-function FieldControl({ mode, value, displayValue, options, tokens, onPick, onClear }) {
+function FieldControl({ mode, value, displayValue, options, tokens, onPick, onClear, onToggleDropdown, onToggleCalendar, dropdownOpen, calendarOpen }) {
   if (mode === "segmented") {
     const segments = Array.from(new Set(options.filter(Boolean))).slice(0, 4);
     return h("div", { className: "segmented-control" },
@@ -562,37 +629,34 @@ function FieldControl({ mode, value, displayValue, options, tokens, onPick, onCl
         onClick: () => onPick(segment),
         type: "button"
       }, segment)),
-      h("button", { className: "calendar-button", type: "button", onClick: () => onPick(value || "October 2025") }, h(Icon, { name: "calendar" }))
+      h("button", {
+        className: calendarOpen ? "calendar-button active" : "calendar-button",
+        type: "button",
+        onClick: onToggleCalendar,
+        "aria-label": "Open custom time period",
+      }, h(Icon, { name: "calendar" }))
     );
   }
   if (mode === "tokens") {
-    return h("button", { className: "token-control", type: "button", onClick: () => onPick(options[0] || tokens[0]) },
+    return h("button", { className: "token-control", type: "button", onClick: onToggleDropdown },
       h("span", { className: "token-list" },
         tokens.filter(Boolean).slice(0, 3).map(token => h("span", { className: "input-token", key: token },
           token,
           h("span", { className: "token-x", onClick: e => { e.stopPropagation(); onClear?.(); } }, h(Icon, { name: "close" }))
         ))
       ),
-      h(Icon, { name: "chevron" })
+      h("span", { className: dropdownOpen ? "control-chevron flip" : "control-chevron" }, h(Icon, { name: "chevron" }))
     );
   }
   if (mode === "optional") {
     return h("div", { className: value ? "optional-control filled" : "optional-control empty" },
-      h("button", { type: "button", onClick: () => onPick(options[0] || value) },
+      h("button", { type: "button", onClick: onToggleDropdown },
         h("span", null, displayValue),
         h(Icon, { name: "chevron" })
-      ),
-      value && options.length ? h("div", { className: "inline-options" },
-        options.slice(0, 2).map(option => h("button", {
-          type: "button",
-          key: option,
-          className: option === value ? "chip selected" : "chip",
-          onClick: () => onPick(option)
-        }, option))
-      ) : null
+      )
     );
   }
-  return h("button", { className: "select-control", type: "button", onClick: () => onPick(options[0] || value || displayValue) },
+  return h("button", { className: "select-control", type: "button", onClick: onToggleDropdown },
     h(Icon, { name: "target" }),
     h("span", { className: value ? "" : "placeholder" }, displayValue),
     value ? h("span", { className: "clear-control", onClick: e => { e.stopPropagation(); onClear?.(); } }, h(Icon, { name: "close" })) : null,

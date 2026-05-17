@@ -3424,6 +3424,97 @@ pre {
   color: var(--amber);
 }
 
+/* U3: Field dropdown + calendar popover */
+.field-row {
+  position: relative;
+}
+
+.field-popover {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(17, 26, 44, 0.12);
+  left: 0;
+  margin-top: 8px;
+  max-width: 460px;
+  min-width: 280px;
+  padding: 10px 0 12px;
+  position: absolute;
+  top: 100%;
+  z-index: 30;
+}
+
+.field-popover-calendar {
+  left: auto;
+  right: 0;
+}
+
+.field-popover-head {
+  color: var(--muted);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 4px 16px 6px;
+  text-transform: uppercase;
+}
+
+.field-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.popover-option {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  display: flex;
+  font-size: 13px;
+  font-weight: 500;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 8px 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.popover-option:hover {
+  background: var(--wash-blue);
+  transform: none;
+}
+
+.popover-option.selected {
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.popover-option svg {
+  height: 14px;
+  width: 14px;
+}
+
+.calendar-button.active {
+  background: var(--wash-blue);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.control-chevron.flip {
+  display: inline-flex;
+  transform: rotate(180deg);
+  transition: transform 140ms ease;
+}
+
+.control-chevron {
+  display: inline-flex;
+  transition: transform 140ms ease;
+}
+
 /* U2: Suggestion chip applied feedback */
 .suggestion-chip.applied {
   background: var(--wash-teal);
