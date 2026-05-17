@@ -19,6 +19,22 @@ function money(value) {
   return n.toLocaleString();
 }
 
+function compactNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function ms(value) {
+  const n = Number(value || 0);
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}s`;
+  return `${n}ms`;
+}
+
+function usd(value) {
+  const n = Number(value || 0);
+  if (!n) return "$0.0000";
+  return `$${n.toFixed(4)}`;
+}
+
 function titleCase(text) {
   return String(text || "").replace(/\b\w/g, s => s.toUpperCase());
 }
@@ -61,6 +77,7 @@ function App() {
   if (path.startsWith("/review/")) return h(Layout, { active: "review" }, h(ReviewPage, { id: path.split("/").pop() }));
   if (path.startsWith("/handoff/")) return h(Layout, { active: "handoff" }, h(HandoffPage, { id: path.split("/").pop() }));
   if (path.startsWith("/analysis/")) return h(Layout, { active: "analysis" }, h(AnalysisPage, { id: path.split("/").pop() }));
+  if (path.startsWith("/admin/costs")) return h(Layout, { active: "admin" }, h(AdminCostsPage));
   if (path.startsWith("/library")) return h(Layout, { active: "library" }, h(LibraryPage));
   return h(Layout, { active: "ask" }, h(AskWorkspace));
 }
@@ -88,7 +105,8 @@ function Layout({ active, children }) {
           h(NavLink, { active: active === "ask", href: "/" }, "Ask"),
           h(NavLink, { active: active === "library", href: "/library" }, "Library"),
           h(NavLink, { active: active === "analysis", href: `/analysis/${HERO_ID}` }, "Build pack"),
-          h(NavLink, { active: active === "review", href: `/review/${HERO_ID}` }, "Evidence room")
+          h(NavLink, { active: active === "review", href: `/review/${HERO_ID}` }, "Evidence room"),
+          h(NavLink, { active: active === "admin", href: "/admin/costs" }, "Admin")
         ),
         h("span", { className: "user-menu" },
           h("span", { className: "avatar" }, "MK"),
@@ -648,6 +666,104 @@ function LibraryCard({ item }) {
       h("button", { onClick: () => navigate(route) }, "Open pack", h(Icon, { name: "arrow" })),
       h("button", { className: "secondary", onClick: () => navigate(`/review/${item.id}`) }, "Evidence")
     )
+  );
+}
+
+function AdminCostsPage() {
+  const [data, setData] = React.useState(null);
+  const [detail, setDetail] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const refresh = () => {
+    setLoading(true);
+    api("/api/admin/costs").then(setData).finally(() => setLoading(false));
+  };
+  React.useEffect(refresh, []);
+  if (loading && !data) return h(LoadingPanel, { label: "Loading cost telemetry..." });
+  const totals = data?.totals || {};
+  const runs = data?.runs || [];
+  const openDetail = run => {
+    api(`/api/admin/costs/${run.runId}`).then(setDetail);
+  };
+  return h(React.Fragment, null,
+    h("section", { className: "subpage-hero admin-hero" },
+      h("div", null,
+        h("span", { className: "kicker" }, "Admin"),
+        h("h1", null, "Time and token cost telemetry."),
+        h("p", null, "A lightweight admin view of Ask, Validate, Build, export, and LLM stage cost. Dollar values are estimates.")
+      ),
+      h("button", { onClick: refresh }, h(Icon, { name: "search" }), "Refresh")
+    ),
+    h("section", { className: "cost-summary-grid" },
+      h(CostSummaryCard, { label: "Runs", value: compactNumber(totals.runs), detail: `${compactNumber(totals.events)} events` }),
+      h(CostSummaryCard, { label: "LLM calls", value: compactNumber(totals.llmCalls), detail: `${compactNumber(totals.totalTokens)} tokens` }),
+      h(CostSummaryCard, { label: "Estimated cost", value: usd(totals.estimatedCostUsd), detail: "model pricing table" }),
+      h(CostSummaryCard, { label: "Total latency", value: ms(totals.durationMs), detail: "summed event duration" })
+    ),
+    h("section", { className: "cost-table-shell" },
+      h("div", { className: "module-head" },
+        h("div", null,
+          h("span", { className: "kicker" }, "Runs"),
+          h("h2", null, "Past Ask, Validate, Build, and export activity")
+        ),
+        h("span", { className: "meta" }, data?.pricing?.source || "Estimated pricing")
+      ),
+      runs.length ? h("table", { className: "table cost-table" },
+        h("thead", null, h("tr", null,
+          ["Status", "Action", "Question", "Latency", "Tokens", "Est. cost", ""].map(label => h("th", { key: label }, label))
+        )),
+        h("tbody", null, runs.map(run => h("tr", { key: run.runId },
+          h("td", null, h("span", { className: `cost-status ${run.status}` }, run.status)),
+          h("td", null, run.actions?.join(", ") || "event"),
+          h("td", null,
+            h("strong", null, run.analysisId || run.runId),
+            h("small", null, run.questionText || "No question text captured")
+          ),
+          h("td", null, ms(run.durationMs)),
+          h("td", null, compactNumber(run.totalTokens)),
+          h("td", null, usd(run.estimatedCostUsd)),
+          h("td", null, h("button", { className: "secondary", onClick: () => openDetail(run) }, "Details"))
+        )))
+      ) : h("div", { className: "empty-library" }, "No telemetry yet. Ask, validate, build, or export to populate this page.")
+    ),
+    detail ? h(CostDetailDrawer, { detail, onClose: () => setDetail(null) }) : null
+  );
+}
+
+function CostSummaryCard({ label, value, detail }) {
+  return h("article", { className: "cost-summary-card" },
+    h("span", { className: "kicker" }, label),
+    h("strong", null, value),
+    h("small", null, detail)
+  );
+}
+
+function CostDetailDrawer({ detail, onClose }) {
+  const summary = detail.summary || {};
+  const events = detail.events || [];
+  return h("aside", { className: "drawer cost-detail" },
+    h("div", { className: "drawer-head" },
+      h("div", null,
+        h("span", { className: "kicker" }, "Run detail"),
+        h("h2", null, summary.analysisId || summary.runId)
+      ),
+      h("button", { className: "icon-button", onClick: onClose, title: "Close" }, h(Icon, { name: "close" }))
+    ),
+    h("div", { className: "cost-detail-metrics" },
+      h(CostSummaryCard, { label: "Status", value: summary.status || "unknown", detail: summary.actions?.join(", ") || "" }),
+      h(CostSummaryCard, { label: "Tokens", value: compactNumber(summary.totalTokens), detail: `${summary.llmCalls || 0} LLM calls` }),
+      h(CostSummaryCard, { label: "Cost", value: usd(summary.estimatedCostUsd), detail: "estimated" })
+    ),
+    h("div", { className: "stage-list detail-events" },
+      events.map(event => h("div", { className: `stage-row ${event.status === "success" ? "done" : event.status}`, key: event.event_id },
+        h("span", null),
+        h("strong", null, event.stage_tag || event.action || event.event_type),
+        h("em", null, `${ms(event.duration_ms)} | ${compactNumber(event.total_tokens)} tok | ${usd(event.estimated_cost_usd)}`)
+      ))
+    ),
+    summary.analysisId ? h("div", { className: "library-actions" },
+      h("button", { onClick: () => navigate(`/analysis/${summary.analysisId}`) }, "Open pack"),
+      h("button", { className: "secondary", onClick: () => navigate(`/review/${summary.analysisId}`) }, "Evidence")
+    ) : null
   );
 }
 

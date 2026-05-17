@@ -26,6 +26,7 @@ from openai import OpenAI
 
 from trust_analytics.config import Settings
 from trust_analytics.models import UsageRecord
+from trust_analytics.telemetry import record_event
 
 
 class LLMError(RuntimeError):
@@ -103,6 +104,7 @@ class OpenAIClient:
         if not self.settings.openai_api_key:
             raise LLMAuthError("OPENAI_API_KEY is not set.")
 
+        start = time.perf_counter()
         client = OpenAI(
             api_key=self.settings.openai_api_key,
         )
@@ -118,24 +120,33 @@ class OpenAIClient:
         try:
             response = client.chat.completions.create(**kwargs)
         except openai.AuthenticationError as exc:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "auth", str(exc))
             raise LLMAuthError(str(exc)) from exc
         except openai.PermissionDeniedError as exc:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "auth", str(exc))
             raise LLMAuthError(str(exc)) from exc
         except openai.RateLimitError as exc:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "quota", str(exc))
             raise LLMQuotaError(str(exc)) from exc
         except openai.APITimeoutError as exc:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "transient", str(exc))
             raise LLMTransientError(str(exc)) from exc
         except openai.APIConnectionError as exc:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "transient", str(exc))
             raise LLMTransientError(str(exc)) from exc
         except openai.InternalServerError as exc:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "transient", str(exc))
             raise LLMTransientError(str(exc)) from exc
         except openai.BadRequestError as exc:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "output", str(exc))
             raise LLMOutputError(f"Bad request to model: {exc}") from exc
         except openai.OpenAIError as exc:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "transient", str(exc))
             raise LLMTransientError(f"Unexpected upstream error: {exc}") from exc
 
         message = response.choices[0].message.content
         if not message:
+            _record_llm_failure(stage_tag, self.settings.openai_model, start, "output", "empty response")
             raise LLMOutputError("Model returned an empty response.")
 
         usage_data: dict[str, Any] = {}
@@ -154,6 +165,15 @@ class OpenAIClient:
             model=self.settings.openai_model,
             usage=usage,
             provider="openai",
+        )
+        record_event(
+            event_type="llm_stage",
+            status="success",
+            action="llm_call",
+            stage_tag=stage_tag,
+            model=self.settings.openai_model,
+            usage=usage,
+            duration_ms=int((time.perf_counter() - start) * 1000),
         )
         return LLMResponse(content=message, usage=usage)
 
@@ -180,6 +200,7 @@ class FixtureLLMClient:
         self.available = True
 
     def chat_json(self, system: str, user: str, *, stage_tag: str = "") -> LLMResponse:
+        start = time.perf_counter()
         # stage_tag is e.g. "sql_agent:q1_gtv_idr_by_asset_oct_2025"
         slug = stage_tag.replace(":", "__") or "default"
         path = self.fixtures_dir / f"{slug}.json"
@@ -190,6 +211,16 @@ class FixtureLLMClient:
             )
         data = json.loads(path.read_text(encoding="utf-8"))
         usage = UsageRecord.model_validate(data.get("usage") or {})
+        record_event(
+            event_type="llm_stage",
+            status="success",
+            action="llm_call",
+            stage_tag=stage_tag,
+            model=usage.model,
+            usage=usage,
+            duration_ms=int((time.perf_counter() - start) * 1000),
+            extra={"provider": "fixture"},
+        )
         return LLMResponse(content=data["content"], usage=usage)
 
 
@@ -237,3 +268,21 @@ def _extract_cost(usage_data: dict[str, Any]) -> float | None:
             except (TypeError, ValueError):
                 return None
     return None
+
+
+def _record_llm_failure(
+    stage_tag: str,
+    model: str,
+    start: float,
+    error_class: str,
+    message: str,
+) -> None:
+    record_event(
+        event_type="llm_stage",
+        status="failed",
+        action="llm_call",
+        stage_tag=stage_tag,
+        model=model,
+        duration_ms=int((time.perf_counter() - start) * 1000),
+        error={"class": error_class, "message": message},
+    )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,12 @@ from trust_analytics.portal import (
     run_and_persist_analysis,
     run_or_cache,
     shape_question,
+)
+from trust_analytics.telemetry import (
+    record_event,
+    summarize_costs,
+    summarize_run_detail,
+    telemetry_context,
 )
 
 
@@ -86,14 +93,46 @@ def library() -> list[dict[str, Any]]:
 
 @app.post("/api/analysis/run")
 def run_analysis(request: RunRequest) -> dict[str, Any]:
-    return run_or_cache(
-        question_id=request.question_id or HERO_ID,
+    run_id = uuid.uuid4().hex
+    start = time.perf_counter()
+    with telemetry_context(
+        run_id=run_id,
+        action="build_pack",
+        analysis_id=request.question_id or HERO_ID,
         question_text=request.question_text,
-    )
+    ):
+        try:
+            analysis = run_or_cache(
+                question_id=request.question_id or HERO_ID,
+                question_text=request.question_text,
+            )
+            record_event(
+                event_type="app_call",
+                status=_status_for_analysis(analysis),
+                action="build_pack",
+                run_id=run_id,
+                analysis_id=analysis["id"],
+                question_text=request.question_text or analysis.get("question"),
+                duration_ms=int((time.perf_counter() - start) * 1000),
+            )
+            return analysis
+        except Exception as exc:
+            record_event(
+                event_type="app_call",
+                status="failed",
+                action="build_pack",
+                run_id=run_id,
+                analysis_id=request.question_id or HERO_ID,
+                question_text=request.question_text,
+                duration_ms=int((time.perf_counter() - start) * 1000),
+                error={"type": type(exc).__name__, "message": str(exc)},
+            )
+            raise
 
 
 @app.post("/api/runs")
 def create_run(request: RunSessionRequest) -> dict[str, Any]:
+    start = time.perf_counter()
     shape = shape_question(question_text=request.question_text, **_shape_kwargs(request.fields))
     run_id = uuid.uuid4().hex
     session = {
@@ -112,6 +151,16 @@ def create_run(request: RunSessionRequest) -> dict[str, Any]:
         session["stages"][0]["state"] = "blocked"
         with RUN_LOCK:
             RUN_SESSIONS[run_id] = session
+        record_event(
+            event_type="app_call",
+            status="needs_clarification",
+            action="validate_run",
+            run_id=run_id,
+            analysis_id=shape.get("recommendedAnalysisId"),
+            question_text=request.question_text,
+            duration_ms=int((time.perf_counter() - start) * 1000),
+            extra={"clarification_count": len(shape["clarificationNeeds"])},
+        )
         return session
 
     session["stages"][0]["state"] = "done"
@@ -149,15 +198,39 @@ def get_run_result(run_id: str) -> dict[str, Any]:
 
 @app.post("/api/question/shape")
 def shape_business_question(request: ShapeQuestionRequest) -> dict[str, Any]:
-    return shape_question(
+    start = time.perf_counter()
+    shape = shape_question(
+            question_text=request.question_text,
+            business_objective=request.business_objective,
+            period=request.period,
+            segment=request.segment,
+            dimension=request.dimension,
+            audience=request.audience,
+            desired_output=request.desired_output,
+        )
+    record_event(
+        event_type="app_call",
+        status="success" if shape["quality"]["ready"] else "needs_clarification",
+        action="ask_shape",
+        analysis_id=shape.get("recommendedAnalysisId"),
         question_text=request.question_text,
-        business_objective=request.business_objective,
-        period=request.period,
-        segment=request.segment,
-        dimension=request.dimension,
-        audience=request.audience,
-        desired_output=request.desired_output,
+        duration_ms=int((time.perf_counter() - start) * 1000),
+        extra={"missing_fields": [item["key"] for item in shape.get("missingFields", [])]},
     )
+    return shape
+
+
+@app.get("/api/admin/costs")
+def admin_costs() -> dict[str, Any]:
+    return summarize_costs()
+
+
+@app.get("/api/admin/costs/{run_id}")
+def admin_cost_detail(run_id: str) -> dict[str, Any]:
+    try:
+        return summarize_run_detail(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Run cost record not found.") from exc
 
 
 @app.get("/api/analysis/{analysis_id}")
@@ -172,10 +245,19 @@ def get_cached_analysis(analysis_id: str) -> dict[str, Any]:
 
 @app.get("/api/analysis/{analysis_id}/export.csv")
 def export_csv(analysis_id: str) -> Response:
+    start = time.perf_counter()
     try:
         analysis = cached_analysis(analysis_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    record_event(
+        event_type="app_call",
+        status="success",
+        action="export_csv",
+        analysis_id=analysis_id,
+        question_text=analysis.get("question"),
+        duration_ms=int((time.perf_counter() - start) * 1000),
+    )
     return Response(
         make_csv(analysis),
         media_type="text/csv",
@@ -187,12 +269,22 @@ def export_csv(analysis_id: str) -> Response:
 
 @app.get("/api/analysis/{analysis_id}/deck.pptx")
 def export_deck(analysis_id: str) -> StreamingResponse:
+    start = time.perf_counter()
     try:
         analysis = cached_analysis(analysis_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    deck = make_pptx(analysis)
+    record_event(
+        event_type="app_call",
+        status="success",
+        action="export_ppt",
+        analysis_id=analysis_id,
+        question_text=analysis.get("question"),
+        duration_ms=int((time.perf_counter() - start) * 1000),
+    )
     return StreamingResponse(
-        io.BytesIO(make_pptx(analysis)),
+        io.BytesIO(deck),
         media_type=(
             "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         ),
@@ -204,10 +296,19 @@ def export_deck(analysis_id: str) -> StreamingResponse:
 
 @app.post("/api/analysis/{analysis_id}/email-draft")
 def email_draft(analysis_id: str) -> dict[str, str]:
+    start = time.perf_counter()
     try:
         analysis = cached_analysis(analysis_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    record_event(
+        event_type="app_call",
+        status="success",
+        action="email_draft",
+        analysis_id=analysis_id,
+        question_text=analysis.get("question"),
+        duration_ms=int((time.perf_counter() - start) * 1000),
+    )
     return analysis["emailDraft"]
 
 
@@ -236,16 +337,32 @@ def _set_stage(run_id: str, index: int, state: str) -> None:
 
 
 def _run_session(run_id: str, request: RunSessionRequest) -> None:
+    start = time.perf_counter()
     try:
-        for index in range(1, len(RUN_STAGES) - 1):
-            _set_stage(run_id, index, "current")
-            if index > 1:
-                _set_stage(run_id, index - 1, "done")
-        analysis = run_and_persist_analysis(
-            question_id=request.question_id,
+        with telemetry_context(
+            run_id=run_id,
+            action="validate_run",
+            analysis_id=request.question_id,
             question_text=request.question_text,
-            fields=request.fields,
-        )
+        ):
+            for index in range(1, len(RUN_STAGES) - 1):
+                _set_stage(run_id, index, "current")
+                if index > 1:
+                    _set_stage(run_id, index - 1, "done")
+            analysis = run_and_persist_analysis(
+                question_id=request.question_id,
+                question_text=request.question_text,
+                fields=request.fields,
+            )
+            record_event(
+                event_type="app_call",
+                status=_status_for_analysis(analysis),
+                action="validate_run",
+                run_id=run_id,
+                analysis_id=analysis["id"],
+                question_text=request.question_text,
+                duration_ms=int((time.perf_counter() - start) * 1000),
+            )
         _set_stage(run_id, len(RUN_STAGES) - 2, "done")
         _set_stage(run_id, len(RUN_STAGES) - 1, "done")
         with RUN_LOCK:
@@ -254,6 +371,16 @@ def _run_session(run_id: str, request: RunSessionRequest) -> None:
             session["resultId"] = analysis["id"]
             session["result"] = analysis
     except Exception as exc:  # noqa: BLE001 - run sessions surface structured failures.
+        record_event(
+            event_type="app_call",
+            status="failed",
+            action="validate_run",
+            run_id=run_id,
+            analysis_id=request.question_id,
+            question_text=request.question_text,
+            duration_ms=int((time.perf_counter() - start) * 1000),
+            error={"type": type(exc).__name__, "message": str(exc)},
+        )
         with RUN_LOCK:
             session = RUN_SESSIONS[run_id]
             session["status"] = "failed"
@@ -267,6 +394,13 @@ def _run_session(run_id: str, request: RunSessionRequest) -> None:
             for stage in session["stages"]:
                 if stage["state"] == "current":
                     stage["state"] = "failed"
+
+
+def _status_for_analysis(analysis: dict[str, Any]) -> str:
+    label = (analysis.get("status") or {}).get("label")
+    if label == "Audit required":
+        return "audit_required"
+    return "success"
 
 
 WEB_DIR = Path(__file__).parents[2] / "web"

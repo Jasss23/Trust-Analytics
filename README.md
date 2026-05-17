@@ -88,6 +88,8 @@ trust-analytics cost
 | `GET /api/analysis/{id}/export.csv` | Displayed result rows as CSV. |
 | `GET /api/analysis/{id}/deck.pptx` | Executive slide plus evidence appendix. |
 | `POST /api/analysis/{id}/email-draft` | Professional email draft content. |
+| `GET /api/admin/costs` | Admin telemetry summary for run latency, tokens, and estimated cost. |
+| `GET /api/admin/costs/{run_id}` | Stage/event detail for one telemetry run. |
 
 ## Test
 

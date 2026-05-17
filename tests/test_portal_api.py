@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from trust_analytics import api as api_module
 from trust_analytics.api import app
 from trust_analytics.portal import AUDIT_ID, HERO_ID, MTU_ID
+from trust_analytics.telemetry import record_event
 
 client = TestClient(app)
 
@@ -218,3 +219,40 @@ def test_run_session_completes_with_packable_result(monkeypatch) -> None:
     result = client.get(f"/api/runs/{run['id']}/result")
     assert result.status_code == 200
     assert result.json()["id"] == "adhoc_validated"
+
+
+def test_admin_costs_empty_state(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("trust_analytics.telemetry.RUN_LOG_PATH", tmp_path / "missing.jsonl")
+    response = client.get("/api/admin/costs")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["totals"]["runs"] == 0
+    assert data["runs"] == []
+    assert data["pricing"]["estimated"] is True
+
+
+def test_admin_costs_returns_run_detail(tmp_path: Path, monkeypatch) -> None:
+    log = tmp_path / "runs.jsonl"
+    monkeypatch.setattr("trust_analytics.telemetry.RUN_LOG_PATH", log)
+    record_event(
+        event_type="app_call",
+        status="failed",
+        action="validate_run",
+        run_id="run_failed",
+        analysis_id="analysis_failed",
+        question_text="Bad question",
+        duration_ms=12,
+        error={"type": "RuntimeError", "message": "boom"},
+        log_path=log,
+    )
+
+    response = client.get("/api/admin/costs")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["totals"]["runs"] == 1
+    assert data["runs"][0]["status"] == "failed"
+
+    detail = client.get("/api/admin/costs/run_failed")
+    assert detail.status_code == 200
+    assert detail.json()["summary"]["error"]["message"] == "boom"

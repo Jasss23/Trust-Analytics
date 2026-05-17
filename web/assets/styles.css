@@ -2903,8 +2903,92 @@ button:disabled {
   color: var(--red);
 }
 
+.cost-summary-grid,
+.cost-detail-metrics {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cost-summary-card,
+.cost-table-shell {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.cost-summary-card strong {
+  display: block;
+  font-size: 25px;
+  line-height: 1.1;
+  margin-top: 10px;
+}
+
+.cost-summary-card small {
+  color: var(--muted);
+  display: block;
+  margin-top: 8px;
+}
+
+.cost-table-shell {
+  margin-top: 20px;
+}
+
+.cost-table td strong,
+.cost-table td small {
+  display: block;
+}
+
+.cost-table td small {
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 4px;
+  max-width: 420px;
+}
+
+.cost-status {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 8px;
+}
+
+.cost-status.success {
+  background: var(--wash-teal);
+  color: var(--teal);
+}
+
+.cost-status.failed,
+.cost-status.system_error,
+.cost-status.audit_required {
+  background: var(--wash-red);
+  color: var(--red);
+}
+
+.cost-status.needs_clarification {
+  background: var(--wash-amber);
+  color: var(--amber);
+}
+
+.cost-detail .cost-detail-metrics {
+  grid-template-columns: 1fr;
+  margin: 18px 0;
+}
+
+.detail-events {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
 @media (max-width: 1040px) {
   .library-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cost-summary-grid {
     grid-template-columns: 1fr;
   }
 }
