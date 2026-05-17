@@ -635,32 +635,139 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
         dropdownOpen: open,
         calendarOpen,
       }),
-      open && popoverOptions.length ? h("div", { className: "field-popover" },
-        h("div", { className: "field-popover-head" }, "Choose ", label.toLowerCase()),
-        h("div", { className: "field-popover-list" },
-          popoverOptions.map(option => h("button", {
-            type: "button",
-            key: option,
-            className: option === value ? "popover-option selected" : "popover-option",
-            onClick: () => pickAndClose(option),
-          }, option, option === value ? h(Icon, { name: "check" }) : null))
-        )
-      ) : null,
-      calendarOpen && mode === "segmented" ? h("div", { className: "field-popover field-popover-calendar" },
-        h("div", { className: "field-popover-head" }, "Custom time period"),
-        h("div", { className: "field-popover-list" },
-          CALENDAR_PRESETS.map(option => h("button", {
-            type: "button",
-            key: option,
-            className: option === value ? "popover-option selected" : "popover-option",
-            onClick: () => pickAndClose(option),
-          }, option, option === value ? h(Icon, { name: "check" }) : null))
-        )
-      ) : null,
+      open && mode !== "segmented" ? h(FieldPopover, {
+        anchorRef: wrapRef,
+        label,
+        options: uniqueOptions,
+        value,
+        onPick: pickAndClose,
+        allowCustom: true,
+      }) : null,
+      calendarOpen && mode === "segmented" ? h(CalendarPopover, {
+        anchorRef: wrapRef,
+        value,
+        onPick: pickAndClose,
+      }) : null,
       h("div", { className: `field-state ${status}` },
         h("span", null, status.replace("_", " ")),
         status === "inferred" ? h("button", { type: "button", onClick: onConfirm }, "Confirm") : null,
         status === "missing" ? h("small", null, "Add it here or make the question more explicit.") : null
+      )
+    )
+  );
+}
+
+function useAnchoredPosition(anchorRef, prefer = "below") {
+  const [pos, setPos] = React.useState(null);
+  React.useLayoutEffect(() => {
+    if (!anchorRef.current) return undefined;
+    const update = () => {
+      const rect = anchorRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const wantBelow = prefer === "below" ? spaceBelow >= 280 : false;
+      setPos({
+        left: rect.left,
+        width: Math.max(rect.width, 280),
+        top: wantBelow ? rect.bottom + 8 : null,
+        bottom: wantBelow ? null : viewportHeight - rect.top + 8,
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [anchorRef, prefer]);
+  return pos;
+}
+
+function FieldPopover({ anchorRef, label, options, value, onPick, allowCustom }) {
+  const [query, setQuery] = React.useState("");
+  const inputRef = React.useRef(null);
+  const pos = useAnchoredPosition(anchorRef);
+  React.useEffect(() => { inputRef.current?.focus(); }, []);
+  const filtered = options.filter(option => option.toLowerCase().includes(query.toLowerCase()));
+  const trimmed = query.trim();
+  const showCustom = allowCustom && trimmed && !options.some(o => o.toLowerCase() === trimmed.toLowerCase());
+  const style = pos ? {
+    left: `${pos.left}px`,
+    width: `${pos.width}px`,
+    ...(pos.top != null ? { top: `${pos.top}px` } : { bottom: `${pos.bottom}px` }),
+  } : { visibility: "hidden" };
+  return h("div", { className: "field-popover", style },
+    h("div", { className: "field-popover-head" }, "Choose ", label.toLowerCase()),
+    h("input", {
+      ref: inputRef,
+      className: "popover-search",
+      type: "text",
+      value: query,
+      placeholder: `Search or type custom ${label.toLowerCase()}…`,
+      onChange: e => setQuery(e.target.value),
+      onKeyDown: e => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (showCustom) onPick(trimmed);
+          else if (filtered.length === 1) onPick(filtered[0]);
+        }
+      },
+    }),
+    h("div", { className: "field-popover-list" },
+      filtered.length === 0 && !showCustom ? h("p", { className: "popover-empty" }, "No matches") : null,
+      filtered.map(option => h("button", {
+        type: "button",
+        key: option,
+        className: option === value ? "popover-option selected" : "popover-option",
+        onClick: () => onPick(option),
+      }, option, option === value ? h(Icon, { name: "check" }) : null)),
+      showCustom ? h("button", {
+        type: "button",
+        className: "popover-option custom",
+        onClick: () => onPick(trimmed),
+      }, `Use "${trimmed}"`, h(Icon, { name: "arrow" })) : null
+    )
+  );
+}
+
+function CalendarPopover({ anchorRef, value, onPick }) {
+  const [start, setStart] = React.useState("2025-10");
+  const [end, setEnd] = React.useState("2025-10");
+  const pos = useAnchoredPosition(anchorRef);
+  const monthLabel = isoMonth => {
+    if (!isoMonth) return "";
+    const [y, m] = isoMonth.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+  };
+  const apply = () => {
+    if (!start || !end) return;
+    const startLabel = monthLabel(start);
+    const endLabel = monthLabel(end);
+    onPick(start === end ? startLabel : `${startLabel} to ${endLabel}`);
+  };
+  const style = pos ? {
+    left: `${pos.left + Math.max(0, pos.width - 320)}px`,
+    width: "320px",
+    ...(pos.top != null ? { top: `${pos.top}px` } : { bottom: `${pos.bottom}px` }),
+  } : { visibility: "hidden" };
+  return h("div", { className: "field-popover field-popover-calendar", style },
+    h("div", { className: "field-popover-head" }, "Custom time period"),
+    h("div", { className: "calendar-grid" },
+      h("label", { className: "calendar-input" },
+        h("span", null, "Start"),
+        h("input", { type: "month", value: start, max: end || undefined, onChange: e => setStart(e.target.value) })
+      ),
+      h("label", { className: "calendar-input" },
+        h("span", null, "End"),
+        h("input", { type: "month", value: end, min: start || undefined, onChange: e => setEnd(e.target.value) })
+      )
+    ),
+    value ? h("p", { className: "calendar-current" }, "Current: ", value) : null,
+    h("div", { className: "calendar-actions" },
+      h("button", { type: "button", className: "secondary", onClick: () => onPick("") }, "Clear"),
+      h("button", { type: "button", className: "primary", onClick: apply, disabled: !start || !end || start > end },
+        "Apply range"
       )
     )
   );

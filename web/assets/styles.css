@@ -3565,7 +3565,7 @@ pre {
   max-width: 720px;
 }
 
-/* U3: Field dropdown + calendar popover */
+/* U3 + V4: Field dropdown + calendar popover (anchored, fixed) */
 .field-row {
   position: relative;
 }
@@ -3575,19 +3575,128 @@ pre {
   border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 16px 36px rgba(17, 26, 44, 0.12);
-  left: 0;
-  margin-top: 8px;
   max-width: 460px;
   min-width: 280px;
   padding: 10px 0 12px;
-  position: absolute;
-  top: 100%;
-  z-index: 30;
+  position: fixed;
+  z-index: 60;
 }
 
 .field-popover-calendar {
-  left: auto;
-  right: 0;
+  padding: 14px 16px 16px;
+}
+
+.popover-search {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  margin: 0 16px 8px;
+  outline: none;
+  padding: 8px 10px;
+  width: calc(100% - 32px);
+}
+
+.popover-search:focus {
+  background: #fff;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(13, 99, 206, 0.12);
+}
+
+.popover-option.custom {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.popover-option.custom svg {
+  height: 14px;
+  width: 14px;
+}
+
+.popover-empty {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  padding: 8px 16px;
+}
+
+.calendar-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 4px;
+}
+
+.calendar-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calendar-input span {
+  color: var(--muted);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.calendar-input input[type="month"] {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.calendar-input input[type="month"]:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(13, 99, 206, 0.12);
+  outline: none;
+}
+
+.calendar-current {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+
+.calendar-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.calendar-actions button {
+  border-radius: 7px;
+  font-size: 13px;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+.calendar-actions .secondary {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.calendar-actions .primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.calendar-actions .primary:disabled {
+  background: var(--soft);
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .field-popover-head {
