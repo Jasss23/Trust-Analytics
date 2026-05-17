@@ -108,6 +108,10 @@ function Layout({ active, children }) {
           h(NavLink, { active: active === "review", href: `/review/${HERO_ID}` }, "Evidence room"),
           h(NavLink, { active: active === "admin", href: "/admin/costs" }, "Admin")
         ),
+        h("a", { className: "help-link", href: "#help", onClick: e => e.preventDefault() },
+          h(Icon, { name: "info" }),
+          "Help"
+        ),
         h("span", { className: "user-menu" },
           h("span", { className: "avatar" }, "MK"),
           h("span", null,
@@ -238,7 +242,6 @@ function AskWorkspace() {
     ["target", "Focus on growth priority", () => setField("businessObjective", "Prioritise the next growth focus")],
     ["warning", "Add source caveat", () => setField("desiredOutput", "Decision pack with source caveat")],
     ["table", "Compare by asset class", () => setField("dimension", "Asset class")],
-    ["search", "Show examples", () => navigate("/library")],
   ];
   const objectiveValue = fields.businessObjective || shape?.fields?.businessObjective || "";
   const periodValue = fields.period || shape?.fields?.period || "";
@@ -253,13 +256,6 @@ function AskWorkspace() {
     h("section", { className: "copilot-workspace" },
       h(FlowRail),
       h("div", { className: "ask-main" },
-        h("div", { className: "workspace-title" },
-          h("div", null,
-            h("span", { className: "kicker" }, "Ask"),
-            h("h1", null, "Ask a business question")
-          ),
-          h("button", { className: "ghost-button", onClick: () => navigate("/library") }, h(Icon, { name: "search" }), "Examples")
-        ),
         h("label", { className: "command-card" },
           h("span", { className: "sr-label" }, "Business question"),
           h("textarea", {
@@ -270,8 +266,8 @@ function AskWorkspace() {
             placeholder: "Ask what you need to decide, in plain language."
           }),
           h("div", { className: "command-footer" },
-            h("span", { className: "copilot-state" }, h(Icon, { name: "check" }), "AI copilot active"),
-            h("span", { className: "shape-state" }, loading ? "Shaping question..." : "Confirm inferred fields, then validate live"),
+            h("span", { className: "copilot-state" }, h(Icon, { name: "check" }), "AI Copilot"),
+            h("span", { className: "shape-state" }, loading ? "Shaping…" : "Confirm fields, then validate"),
             h("button", { type: "button", className: "send-button", disabled: !ready, onClick: e => { e.preventDefault(); validate(); } }, h(Icon, { name: "arrow" }))
           )
         ),
@@ -279,7 +275,10 @@ function AskWorkspace() {
           h(Icon, { name: "spark" }),
           suggestions.map(([, item, onClick]) => h("button", { className: "suggestion-chip", key: item, onClick },
             item
-          ))
+          )),
+          h("button", { className: "suggestion-chip examples", onClick: () => navigate("/library") },
+            h(Icon, { name: "search" }), "Examples"
+          )
         ),
         h("div", { className: "field-stack" },
           h(FieldRow, {
@@ -407,7 +406,7 @@ function AskWorkspace() {
 
 function FlowRail() {
   const items = [
-    ["1", "Ask", "Define the business question"],
+    ["1", "Ask", "Refine the business question"],
     ["2", "Shape", "Add context and constraints"],
     ["3", "Validate", "Check logic and data quality"],
     ["4", "Package", "Build decision pack"],
@@ -558,6 +557,13 @@ function QuestionQuality({ shape, loading }) {
     ["Decision audience", shape?.fieldStates?.audience?.status],
     ["Output format", shape?.fieldStates?.desiredOutput?.status],
   ];
+  const tagFor = status => {
+    if (!status || status === "missing") return "Missing";
+    if (status === "confirmed") return "Complete";
+    if (status === "manual_override") return "Confirmed";
+    return "Inferred";
+  };
+  const confidence = shape?.confidence || (shape?.quality?.ready ? "high" : "medium");
   return h("div", { className: "inspector-section quality-section" },
     h("div", { className: "section-minihead" },
       h("span", { className: "kicker" }, "Question quality"),
@@ -573,9 +579,16 @@ function QuestionQuality({ shape, loading }) {
         return h("div", { className: ok ? "quality-row ok" : "quality-row warn", key: label },
         h(Icon, { name: ok ? "check" : "warning" }),
         h("span", null, label),
-        h("em", null, ok ? String(status).replace("_", " ") : "Missing")
+        h("em", null, tagFor(status))
       );
       })
+    ),
+    h("div", { className: "confidence-row" },
+      h("span", { className: "kicker" }, "Confidence"),
+      h("span", { className: `confidence-pill ${confidence}` },
+        h(Icon, { name: confidence === "high" ? "check" : "info" }),
+        confidence === "high" ? "High confidence" : "Medium confidence"
+      )
     )
   );
 }
