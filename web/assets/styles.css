@@ -2255,11 +2255,19 @@ button:hover,
 }
 
 .artifact-row em {
+  background: var(--wash-amber);
   border-radius: 6px;
+  color: var(--amber);
   font-size: 12px;
+  font-style: normal;
   font-weight: 700;
   justify-self: end;
   padding: 5px 8px;
+}
+
+.artifact-row em.ready {
+  background: var(--wash-teal);
+  color: var(--teal);
 }
 
 .artifact-icon {
@@ -2303,19 +2311,35 @@ button:hover,
 }
 
 .build-cta {
-  background: #0d63ce;
-  border-color: #0d63ce;
+  background: var(--blue);
+  border-color: var(--blue);
   border-radius: 7px;
   box-shadow: 0 10px 22px rgba(13, 99, 206, 0.18);
   font-size: 15px;
+  margin-top: 6px;
   min-height: 48px;
 }
 
+.build-cta:focus-visible {
+  box-shadow: 0 0 0 4px rgba(13, 99, 206, 0.22);
+}
+
 .secondary-wide {
-  border-color: #d8e1eb;
+  background: #fff;
+  border-color: transparent;
   border-radius: 7px;
+  color: var(--blue);
   font-size: 14px;
-  min-height: 44px;
+  margin-top: 4px;
+  min-height: 40px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.secondary-wide:hover {
+  background: var(--wash-blue);
+  border-color: var(--wash-blue);
+  text-decoration: none;
 }
 
 .path-section {
