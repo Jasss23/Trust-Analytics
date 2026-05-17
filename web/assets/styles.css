@@ -3533,35 +3533,31 @@ pre {
   width: 100%;
 }
 
-/* V6: Dynamic flow rail states */
+/* V6 + X4: Dynamic flow rail states, vertical fill */
 .copilot-workspace .flow-rail {
   align-self: stretch;
-  background: linear-gradient(180deg, #ffffff 0%, var(--paper) 100%);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
-  min-height: 460px;
-  padding: 26px 22px;
+  padding: 8px 12px 8px 0;
 }
 
 .copilot-workspace .flow-rail .rail-step {
-  margin-bottom: 28px;
+  flex: 1 0 auto;
+  margin: 0;
   position: relative;
-}
-
-.copilot-workspace .flow-rail .rail-step:last-child {
-  margin-bottom: 0;
 }
 
 .copilot-workspace .flow-rail .rail-step::after {
   background: var(--line);
+  bottom: 12px;
   content: "";
-  height: 38px;
   left: 17px;
   position: absolute;
-  top: 44px;
+  top: 50px;
   transition: background 200ms ease;
   width: 1px;
 }
