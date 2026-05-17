@@ -98,6 +98,16 @@ ruff check .
 pytest
 ```
 
+For browser smoke testing, start the API server first, then run:
+
+```bash
+.venv/bin/python scripts/browser_smoke.py --url http://127.0.0.1:8080/
+```
+
+The smoke opens headless Chrome, clicks through Ask, Library, Evidence, Pack,
+and Admin Cost flows, and writes screenshots to
+`/private/tmp/trust-analytics-smoke/`.
+
 ## Deploy
 
 See [deploy/gcp-cloud-run.md](deploy/gcp-cloud-run.md) for Cloud Run steps.

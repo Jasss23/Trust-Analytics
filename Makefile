@@ -1,4 +1,4 @@
-.PHONY: install lint test setup-data run-sample serve
+.PHONY: install lint test setup-data run-sample serve browser-smoke
 
 install:
 	python3 -m venv .venv
@@ -18,3 +18,6 @@ run-sample:
 
 serve:
 	. .venv/bin/activate && uvicorn trust_analytics.api:app --host 0.0.0.0 --port 8080
+
+browser-smoke:
+	.venv/bin/python scripts/browser_smoke.py --url http://127.0.0.1:8080/
