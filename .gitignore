@@ -1,6 +1,8 @@
 .env
 .venv/
 data/
+!demo_data/fintech_analytics/data/
+!demo_data/fintech_analytics/data/*.csv
 docs/pluang_analytics_agent/data/
 docs/pluang_analytics_agent/
 docs/MLE Analytics Agent Case Study JIashun.docx
