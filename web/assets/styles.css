@@ -3389,6 +3389,52 @@ pre {
   }
 }
 
+/* B1: Library Variant A polish */
+.library-source-chip {
+  align-items: center;
+  background: var(--soft);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  height: 22px;
+  letter-spacing: 0.12em;
+  padding: 0 10px;
+  text-transform: uppercase;
+}
+
+.library-card .audit-label {
+  align-items: center;
+  background: var(--wash-amber);
+  border-radius: 7px;
+  color: var(--amber);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 10px;
+}
+
+.library-card .audit-label svg {
+  height: 14px;
+  width: 14px;
+}
+
+.library-card .secondary {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.library-actions button:first-child {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
 /* A3: topbar Help link, confidence pill, quality tag tightening */
 .help-link {
   align-items: center;

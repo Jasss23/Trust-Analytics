@@ -731,18 +731,23 @@ function LibrarySection({ title, items, empty }) {
 }
 
 function LibraryCard({ item }) {
-  const route = `/analysis/${item.id}`;
+  const auditRequired = item.audit?.required;
+  const primaryRoute = auditRequired ? `/handoff/${item.id}` : `/analysis/${item.id}`;
+  const primaryLabel = auditRequired ? "Open audit brief" : "Open pack";
   return h("article", { className: "library-card" },
     h("div", { className: "path-card-top" },
       h(Status, { status: item.status }),
-      h("span", { className: "status-mini" }, item.source === "seed" ? "Seed" : "Ask")
+      h("span", { className: "library-source-chip" }, item.source === "seed" ? "Seed" : "Ask")
     ),
     h("h3", null, item.decisionPack?.title || item.metricName),
     h("p", { className: "question-line small" }, item.question),
     h("p", null, item.headline),
-    item.status?.label === "Audit required" ? h("p", { className: "audit-label" }, "Outputs are available with audit-required labeling.") : null,
+    auditRequired ? h("p", { className: "audit-label" },
+      h(Icon, { name: "warning" }),
+      "Outputs are available with audit-required labeling."
+    ) : null,
     h("div", { className: "library-actions" },
-      h("button", { onClick: () => navigate(route) }, "Open pack", h(Icon, { name: "arrow" })),
+      h("button", { onClick: () => navigate(primaryRoute) }, primaryLabel, h(Icon, { name: "arrow" })),
       h("button", { className: "secondary", onClick: () => navigate(`/review/${item.id}`) }, "Evidence")
     )
   );
