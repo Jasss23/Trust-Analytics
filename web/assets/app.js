@@ -357,8 +357,9 @@ function AskWorkspace() {
             label: "Object / segment",
             mode: "tokens",
             value: segmentValue,
+            placeholder: "Select object or segment",
             options: shape?.suggestedChips?.segment || [],
-            tokens: [segmentValue || "Completed trading activity"],
+            tokens: segmentValue ? [segmentValue] : [],
             state: states.segment,
             onConfirm: () => confirmField("segment"),
             onClear: () => setField("segment", ""),
@@ -377,7 +378,8 @@ function AskWorkspace() {
               options: shape?.suggestedChips?.dimension || [],
               state: states.dimension,
               onConfirm: () => confirmField("dimension"),
-              onPick: v => setField("dimension", v)
+              onPick: v => setField("dimension", v),
+              onClear: () => setField("dimension", "")
             }),
             h(FieldRow, {
               icon: "users",
@@ -388,7 +390,8 @@ function AskWorkspace() {
               options: shape?.suggestedChips?.audience || [],
               state: states.audience,
               onConfirm: () => confirmField("audience"),
-              onPick: v => setField("audience", v)
+              onPick: v => setField("audience", v),
+              onClear: () => setField("audience", "")
             }),
             h(FieldRow, {
               icon: "presentation",
@@ -399,7 +402,8 @@ function AskWorkspace() {
               options: shape?.suggestedChips?.desiredOutput || [],
               state: states.desiredOutput,
               onConfirm: () => confirmField("desiredOutput"),
-              onPick: v => setField("desiredOutput", v)
+              onPick: v => setField("desiredOutput", v),
+              onClear: () => setField("desiredOutput", "")
             })
           )
         ),
@@ -798,15 +802,16 @@ function FieldControl({ mode, value, displayValue, options, tokens, onPick, onCl
     );
   }
   if (mode === "tokens") {
+    const visibleTokens = tokens.filter(Boolean).slice(0, 3);
     return h("div", {
-      className: "token-control",
+      className: visibleTokens.length ? "token-control filled" : "token-control empty",
       role: "button",
       tabIndex: 0,
       onClick: onToggleDropdown,
       onKeyDown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleDropdown(); } },
     },
-      h("span", { className: "token-list" },
-        tokens.filter(Boolean).slice(0, 3).map(token => h("span", { className: "input-token", key: token },
+      visibleTokens.length ? h("span", { className: "token-list" },
+        visibleTokens.map(token => h("span", { className: "input-token", key: token },
           token,
           h("button", {
             type: "button",
@@ -815,7 +820,7 @@ function FieldControl({ mode, value, displayValue, options, tokens, onPick, onCl
             onClick: e => { e.stopPropagation(); onClear?.(); },
           }, h(Icon, { name: "close" }))
         ))
-      ),
+      ) : h("span", { className: "control-placeholder" }, displayValue),
       h("span", { className: dropdownOpen ? "control-chevron flip" : "control-chevron" }, h(Icon, { name: "chevron" }))
     );
   }
