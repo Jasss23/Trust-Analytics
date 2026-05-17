@@ -740,7 +740,15 @@ function LibrarySection({ title, items, empty }) {
     ),
     items.length ? h("div", { className: "library-grid" },
       items.map(item => h(LibraryCard, { key: `${item.source}-${item.id}`, item }))
-    ) : h("div", { className: "empty-library" }, empty || "No cases yet.")
+    ) : h("div", { className: "empty-library" },
+      h("span", { className: "empty-icon" }, h(Icon, { name: "spark" })),
+      h("strong", null, "No validated free asks yet"),
+      h("p", null, empty || "Free Ask runs graduate here once they finish a clean live validation."),
+      h("button", { className: "empty-cta", onClick: () => navigate("/") },
+        h(Icon, { name: "arrow" }),
+        "Validate a question"
+      )
+    )
   );
 }
 
