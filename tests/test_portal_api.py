@@ -83,6 +83,23 @@ def test_question_shape_matches_clear_asset_class_question() -> None:
     assert data["quality"]["label"] in {"Ready to validate", "Needs confirmation"}
 
 
+def test_question_shape_honors_explicitly_cleared_dimension() -> None:
+    """User clearing a field (sending '') wins over keyword-driven inference."""
+    response = client.post(
+        "/api/question/shape",
+        json={
+            "question_text": "Which asset class should we prioritise for growth in October 2025?",
+            "dimension": "",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["fields"]["dimension"] == ""
+    assert data["fieldStates"]["dimension"]["status"] == "missing"
+    assert {"key": "dimension", "label": "Comparison dimension"} in data["missingFields"]
+
+
 def test_question_shape_marks_audience_and_output_missing_when_not_supplied() -> None:
     response = client.post(
         "/api/question/shape",

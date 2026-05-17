@@ -455,9 +455,17 @@ def _infer_ask_fields(
     audience: str | None,
     desired_output: str | None,
 ) -> dict[str, str]:
+    """Compute the effective value per field.
+
+    A passed-in ``""`` means the user explicitly cleared the field, so we
+    honor it and do not re-infer. ``None`` means the field was untouched by
+    the user and the agent may infer from the question text or seed analysis.
+    """
     lowered = text.lower()
-    objective = business_objective or ""
-    if not objective:
+    if business_objective is not None:
+        objective = business_objective
+    else:
+        objective = ""
         if any(token in lowered for token in ["priority", "prioritise", "prioritize", "growth"]):
             objective = "Prioritise the next growth focus"
         elif any(token in lowered for token in ["trend", "safe", "rely", "audit"]):
@@ -465,28 +473,40 @@ def _infer_ask_fields(
         elif any(token in lowered for token in ["report", "mtu", "users"]):
             objective = "Choose the reporting definition"
 
-    selected_period = period or (
-        _display_period(synthesized_period) if synthesized_period != "unspecified" else ""
-    )
-    selected_segment = segment or ""
-    selected_dimension = dimension or ""
-    if analysis["id"] == HERO_ID:
-        selected_segment = selected_segment or "Completed trading activity"
-        selected_dimension = selected_dimension or "Asset class"
-    elif analysis["id"] == AUDIT_ID:
-        selected_segment = selected_segment or "Completed GTV"
-        selected_dimension = selected_dimension or "Month"
-    elif analysis["id"] == MTU_ID:
-        selected_segment = selected_segment or "Transacting users"
-        selected_dimension = selected_dimension or ""
+    if period is not None:
+        selected_period = period
+    else:
+        selected_period = (
+            _display_period(synthesized_period) if synthesized_period != "unspecified" else ""
+        )
+
+    if segment is not None:
+        selected_segment = segment
+    else:
+        selected_segment = ""
+        if analysis["id"] == HERO_ID:
+            selected_segment = "Completed trading activity"
+        elif analysis["id"] == AUDIT_ID:
+            selected_segment = "Completed GTV"
+        elif analysis["id"] == MTU_ID:
+            selected_segment = "Transacting users"
+
+    if dimension is not None:
+        selected_dimension = dimension
+    else:
+        selected_dimension = ""
+        if analysis["id"] == HERO_ID:
+            selected_dimension = "Asset class"
+        elif analysis["id"] == AUDIT_ID:
+            selected_dimension = "Month"
 
     return {
         "businessObjective": objective,
         "period": selected_period,
         "segment": selected_segment,
         "dimension": selected_dimension,
-        "audience": audience or "",
-        "desiredOutput": desired_output or "",
+        "audience": audience if audience is not None else "",
+        "desiredOutput": desired_output if desired_output is not None else "",
     }
 
 
@@ -501,23 +521,38 @@ def _explicit_ask_fields(
     audience: str | None,
     desired_output: str | None,
 ) -> dict[str, bool]:
+    """Return whether each field is explicitly committed by the user.
+
+    A passed-in ``""`` means the user explicitly cleared the field, so we
+    treat it as un-confirmed even if the original question text would have
+    otherwise been a strong keyword hint.
+    """
     lowered = text.lower()
+
+    def _explicit(user_value: str | None, keywords: tuple[str, ...]) -> bool:
+        if user_value == "":
+            return False
+        if user_value:
+            return True
+        return any(token in lowered for token in keywords)
+
     return {
-        "businessObjective": bool(
-            business_objective
-            or any(
-                token in lowered
-                for token in ["priority", "prioritise", "prioritize", "growth", "report", "audit", "safe"]
-            )
+        "businessObjective": _explicit(
+            business_objective,
+            ("priority", "prioritise", "prioritize", "growth", "report", "audit", "safe"),
         ),
-        "period": bool(period or synthesized_period != "unspecified"),
-        "segment": bool(
-            segment
-            or any(token in lowered for token in ["completed", "trading", "users", "asset", "gtv"])
+        "period": (
+            False
+            if period == ""
+            else bool(period or synthesized_period != "unspecified")
         ),
-        "dimension": bool(
-            dimension
-            or any(token in lowered for token in ["asset class", "asset", "month", "trend", "definition", "source"])
+        "segment": _explicit(
+            segment,
+            ("completed", "trading", "users", "asset", "gtv"),
+        ),
+        "dimension": _explicit(
+            dimension,
+            ("asset class", "asset", "month", "trend", "definition", "source"),
         ),
         "audience": bool(audience),
         "desiredOutput": bool(desired_output),
