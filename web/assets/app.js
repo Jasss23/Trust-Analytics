@@ -423,6 +423,54 @@ function FlowRail() {
   );
 }
 
+function WorkspaceRail({ active }) {
+  const items = [
+    ["ask", "Ask", "Shape a natural-language question", "/"],
+    ["library", "Library", "Open seed and validated packs", "/library"],
+    ["analysis", "Build pack", "Package a decision-ready answer", `/analysis/${HERO_ID}`],
+    ["review", "Evidence room", "Inspect SQL, sources, and QA", `/review/${HERO_ID}`],
+    ["admin", "Admin", "Review latency and token cost", "/admin/costs"],
+  ];
+  return h("aside", { className: "flow-rail workspace-rail" },
+    items.map((item, index) => h("button", {
+      className: item[0] === active ? "rail-step active" : "rail-step",
+      key: item[0],
+      type: "button",
+      onClick: () => navigate(item[3])
+    },
+      h("span", { className: "rail-number" }, String(index + 1)),
+      h("span", null,
+        h("strong", null, item[1]),
+        h("small", null, item[2])
+      )
+    ))
+  );
+}
+
+function SubpageWorkspace({ active, children, inspector }) {
+  return h("section", { className: `subpage-workspace subpage-${active}` },
+    h(WorkspaceRail, { active }),
+    h("div", { className: "subpage-main" }, children),
+    inspector ? h("aside", { className: "inspector-panel subpage-inspector" }, inspector) : null
+  );
+}
+
+function InspectorCard({ kicker, title, body, badges = [], action }) {
+  return h("div", { className: "inspector-section" },
+    h("div", { className: "section-minihead" },
+      h("span", { className: "kicker" }, kicker),
+      action || null
+    ),
+    h("div", { className: "quality-summary compact" },
+      h("strong", null, title),
+      body ? h("p", null, body) : null
+    ),
+    badges.length ? h("div", { className: "trust-badges" },
+      badges.map(item => h("span", { key: item }, item))
+    ) : null
+  );
+}
+
 function FieldRow({ icon, label, mode = "select", value, placeholder, options = [], tokens = [], state, onPick, onClear, onConfirm }) {
   const displayValue = value || placeholder || "Not set";
   const uniqueOptions = Array.from(new Set(options.filter(Boolean)));
@@ -623,11 +671,29 @@ function LibraryPage() {
   if (loading) return h(LoadingPanel, { label: "Opening success library..." });
   const seed = items.filter(item => item.source === "seed");
   const ask = items.filter(item => item.source === "ask");
-  return h(React.Fragment, null,
+  return h(SubpageWorkspace, {
+    active: "library",
+    inspector: [
+      h(InspectorCard, {
+        key: "quality",
+        kicker: "Library quality",
+        title: `${items.length} reusable cases`,
+        body: "Seed stories stay separate from the Ask workspace, while successful free asks can graduate here.",
+        badges: ["5 seed demos", "Evidence linked", "Pack first"]
+      }),
+      h(InspectorCard, {
+        key: "handoff",
+        kicker: "Reviewer path",
+        title: "Open pack, then evidence",
+        body: "Business owners see the pack first. Analysts can drill into SQL, source comparison, QA, and challenge notes.",
+        badges: ["BD-safe", "Analyst detail"]
+      })
+    ]
+  },
     h("section", { className: "subpage-hero library-hero" },
       h("div", null,
         h("span", { className: "kicker" }, "Library"),
-        h("h1", null, "Successful analyses and seed demo stories."),
+        h("h1", null, "Successful analyses and seed demo stories"),
         h("p", null, "Open a decision pack first, then drill into evidence when an analyst needs to challenge the result.")
       ),
       h("button", { onClick: () => navigate("/") }, h(Icon, { name: "arrow" }), "Ask new question")
@@ -684,11 +750,34 @@ function AdminCostsPage() {
   const openDetail = run => {
     api(`/api/admin/costs/${run.runId}`).then(setDetail);
   };
-  return h(React.Fragment, null,
+  return h(SubpageWorkspace, {
+    active: "admin",
+    inspector: [
+      h(InspectorCard, {
+        key: "admin",
+        kicker: "Admin lens",
+        title: "Demo observability",
+        body: "This is directional cost awareness for API-heavy workflows, not billing-grade accounting.",
+        badges: ["Estimated", "JSONL-backed", "Run-level"]
+      }),
+      h("div", { key: "pricing", className: "inspector-section artifact-section" },
+        h("div", { className: "section-minihead" },
+          h("span", { className: "kicker" }, "Pricing source"),
+          h("span", { className: "status-mini" }, "Estimate")
+        ),
+        h("p", null, data?.pricing?.source || "Estimated model pricing table"),
+        h("div", { className: "stage-list" },
+          h("div", { className: "stage-row done" }, h("span", null), h("strong", null, "Events captured"), h("em", null, compactNumber(totals.events))),
+          h("div", { className: "stage-row current" }, h("span", null), h("strong", null, "LLM calls"), h("em", null, compactNumber(totals.llmCalls))),
+          h("div", { className: "stage-row pending" }, h("span", null), h("strong", null, "Token cost"), h("em", null, usd(totals.estimatedCostUsd)))
+        )
+      )
+    ]
+  },
     h("section", { className: "subpage-hero admin-hero" },
       h("div", null,
         h("span", { className: "kicker" }, "Admin"),
-        h("h1", null, "Time and token cost telemetry."),
+        h("h1", null, "Time and token cost telemetry"),
         h("p", null, "A lightweight admin view of Ask, Validate, Build, export, and LLM stage cost. Dollar values are estimates.")
       ),
       h("button", { onClick: refresh }, h(Icon, { name: "search" }), "Refresh")
@@ -800,7 +889,27 @@ function AnalysisPage({ id }) {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  return h(React.Fragment, null,
+  return h(SubpageWorkspace, {
+    active: "analysis",
+    inspector: h("aside", { className: "pack-actions", id: "review" },
+      h("span", { className: "kicker" }, analysis.decisionPack?.title || "Decision pack"),
+      h("h2", null, "Package this analysis"),
+      h("p", null, analysis.recommendedUse),
+      h(FlowSteps, { steps: analysis.workflowSteps || [] }),
+      h("div", { className: "action-stack" },
+        ACTIONS.map(action => h(ActionButton, {
+          key: action.key,
+          action,
+          analysis,
+          copied,
+          generated,
+          onGenerated: () => setGenerated(true),
+          onCopy: copySummary,
+          onEmail: () => setDraftOpen(true)
+        }))
+      )
+    )
+  },
     h("section", { className: "pack-workspace" },
       h("div", { className: "pack-main" },
         h("div", { className: "reliability-row" },
@@ -838,24 +947,6 @@ function AnalysisPage({ id }) {
           )
         )
       ),
-      h("aside", { className: "pack-actions", id: "review" },
-        h("span", { className: "kicker" }, analysis.decisionPack?.title || "Decision pack"),
-        h("h2", null, "Package this analysis"),
-        h("p", null, analysis.recommendedUse),
-        h(FlowSteps, { steps: analysis.workflowSteps || [] }),
-        h("div", { className: "action-stack" },
-          ACTIONS.map(action => h(ActionButton, {
-            key: action.key,
-            action,
-            analysis,
-            copied,
-            generated,
-            onGenerated: () => setGenerated(true),
-            onCopy: copySummary,
-            onEmail: () => setDraftOpen(true)
-          }))
-        )
-      )
     ),
     draftOpen ? h(EmailDrawer, { analysis, onClose: () => setDraftOpen(false) }) : null
   );
@@ -964,14 +1055,34 @@ function ReviewPage({ id }) {
   if (!analysis) return h(LoadingPanel, { label: "Opening evidence room..." });
   const ev = analysis.analystEvidence;
   const source = ev.source || {};
-  return h(React.Fragment, null,
+  return h(SubpageWorkspace, {
+    active: "review",
+    inspector: [
+      h("div", { key: "status", className: "inspector-section quality-section" },
+        h("div", { className: "section-minihead" },
+          h("span", { className: "kicker" }, "Review status"),
+          h(Status, { status: analysis.status })
+        ),
+        h("div", { className: "quality-summary" },
+          h("strong", null, "Analyst evidence view"),
+          h("p", null, "Dense QA and source detail stays here, away from the business-facing pack.")
+        )
+      ),
+      h(InspectorCard, {
+        key: "layers",
+        kicker: "Evidence layers",
+        title: "Source, SQL, QA, challenge",
+        body: "Use this room to defend, challenge, or hand off a result before it becomes leadership material.",
+        badges: ["SQL visible", "QA layers", "Challenge notes"]
+      })
+    ]
+  },
     h("section", { className: "subpage-hero evidence-hero" },
       h("div", null,
         h("span", { className: "kicker" }, "Evidence room"),
-        h("h1", null, "Why this answer is defensible."),
+        h("h1", null, "Why this answer is defensible"),
         h("p", null, analysis.question)
-      ),
-      h(Status, { status: analysis.status, showDescription: true })
+      )
     ),
     h("section", { className: "evidence-shell" },
       h("div", { className: "tabs" },
@@ -1015,14 +1126,34 @@ function HandoffPage({ id }) {
   React.useEffect(() => { api(`/api/analysis/${id}`).then(setAnalysis); }, [id]);
   if (!analysis) return h(LoadingPanel, { label: "Preparing audit brief..." });
   const audit = analysis.audit;
-  return h(React.Fragment, null,
+  return h(SubpageWorkspace, {
+    active: "review",
+    inspector: [
+      h("div", { key: "audit", className: "inspector-section quality-section" },
+        h("div", { className: "section-minihead" },
+          h("span", { className: "kicker" }, "Audit status"),
+          h(Status, { status: analysis.status })
+        ),
+        h("div", { className: "quality-summary" },
+          h("strong", null, "Soft-blocked output"),
+          h("p", null, "Outputs remain possible only with audit labels and evidence appendix.")
+        )
+      ),
+      h(InspectorCard, {
+        key: "next",
+        kicker: "Next action",
+        title: "Resolve source conflict",
+        body: "Keep the decision caveated until the stale source is corrected or explicitly excluded.",
+        badges: ["Audit label", "Evidence appendix"]
+      })
+    ]
+  },
     h("section", { className: "subpage-hero blocked" },
       h("div", null,
         h("span", { className: "kicker" }, "Audit brief"),
-        h("h1", null, "Decision blocked until source conflict is resolved."),
+        h("h1", null, "Decision blocked until source conflict is resolved"),
         h("p", null, audit.reason || analysis.status.description)
-      ),
-      h(Status, { status: analysis.status, showDescription: true })
+      )
     ),
     h("section", { className: "audit-grid" },
       h("div", { className: "audit-panel" },

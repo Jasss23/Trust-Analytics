@@ -251,9 +251,17 @@ def run_smoke(url: str, port: int, screenshot_dir: Path) -> dict:
         evaluate(cdp, "location.href = '/library'; true", timeout=5)
         time.sleep(0.8)
         save_screenshot(cdp, screenshot_dir / "library.png")
+        evaluate(cdp, "location.href = '/analysis/q1_gtv_idr_by_asset_oct_2025'; true", timeout=5)
+        time.sleep(0.8)
+        save_screenshot(cdp, screenshot_dir / "pack.png")
+        evaluate(cdp, "location.href = '/review/q1_gtv_idr_by_asset_oct_2025'; true", timeout=5)
+        time.sleep(0.8)
+        save_screenshot(cdp, screenshot_dir / "evidence.png")
         result["screenshots"] = {
             "adminCosts": str(screenshot_dir / "admin-costs.png"),
             "library": str(screenshot_dir / "library.png"),
+            "pack": str(screenshot_dir / "pack.png"),
+            "evidence": str(screenshot_dir / "evidence.png"),
         }
         missing = [item for item in result["results"] if not item.get("ok")]
         if result.get("errors") or missing or not result.get("costDetailOpen"):
