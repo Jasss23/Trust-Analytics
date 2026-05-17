@@ -3002,27 +3002,71 @@ button:disabled {
 }
 
 .workspace-rail {
+  align-self: stretch;
+  border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   gap: 0;
+  padding: 10px 24px 0 0;
 }
 
 .workspace-rail .rail-step {
+  align-items: flex-start;
   background: transparent;
   border: 0;
   border-radius: 0;
+  box-shadow: none;
   color: var(--muted);
+  cursor: pointer;
   display: grid;
-  font-weight: inherit;
+  gap: 13px;
+  grid-template-columns: 36px minmax(0, 1fr);
   justify-content: initial;
+  margin: 0 0 28px;
   min-height: 0;
   padding: 0;
+  position: relative;
   text-align: left;
+  transition: color 140ms ease;
   width: 100%;
+}
+
+.workspace-rail .rail-step strong {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.workspace-rail .rail-step small {
+  color: #6c7a8d;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.workspace-rail .rail-step:last-child {
+  margin-bottom: 0;
+}
+
+.workspace-rail .rail-step::after {
+  background: var(--line);
+  content: "";
+  height: 22px;
+  left: 17px;
+  position: absolute;
+  top: 44px;
+  transition: background 200ms ease;
+  width: 1px;
+}
+
+.workspace-rail .rail-step:last-child::after {
+  display: none;
 }
 
 .workspace-rail .rail-step:hover {
   color: var(--ink);
+  transform: none;
 }
 
 .workspace-rail .rail-step.active {
@@ -3533,7 +3577,7 @@ pre {
   width: 100%;
 }
 
-/* V6 + X4 + Y2 + Z1: Dynamic flow rail with clickable navigation + right divider */
+/* V6 + X4 + Y2 + Z1 + AA1: Flow rail synced to subpage WorkspaceRail */
 .copilot-workspace .flow-rail {
   align-self: stretch;
   background: transparent;
@@ -3549,7 +3593,7 @@ pre {
   align-items: flex-start;
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow: none;
   color: var(--muted);
   cursor: pointer;
@@ -3557,36 +3601,55 @@ pre {
   flex: 0 0 auto;
   gap: 13px;
   grid-template-columns: 36px minmax(0, 1fr);
-  margin: 0 0 4px;
+  margin: 0 0 28px;
   min-height: 0;
-  padding: 6px 8px 28px;
+  padding: 0;
   position: relative;
   text-align: left;
-  transition: background 140ms ease;
+  transition: color 140ms ease;
   width: 100%;
 }
 
 .copilot-workspace .flow-rail .rail-step:hover:not(:disabled) {
-  background: var(--soft);
+  background: transparent;
+  color: var(--ink);
   transform: none;
+}
+
+.copilot-workspace .flow-rail .rail-step:hover:not(:disabled) strong {
+  color: var(--ink);
 }
 
 .copilot-workspace .flow-rail .rail-step:disabled {
   cursor: not-allowed;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .copilot-workspace .flow-rail .rail-step:last-child {
-  padding-bottom: 8px;
+  margin-bottom: 0;
+}
+
+.copilot-workspace .flow-rail .rail-step strong {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.copilot-workspace .flow-rail .rail-step small {
+  color: #6c7a8d;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .copilot-workspace .flow-rail .rail-step::after {
   background: var(--line);
-  bottom: 6px;
   content: "";
-  left: 25px;
+  height: 22px;
+  left: 17px;
   position: absolute;
-  top: 48px;
+  top: 44px;
   transition: background 200ms ease;
   width: 1px;
 }
@@ -3602,7 +3665,7 @@ pre {
 .copilot-workspace .flow-rail .rail-step-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .copilot-workspace .flow-rail .rail-lock-hint {
@@ -3617,7 +3680,7 @@ pre {
   font-weight: 700;
   gap: 4px;
   letter-spacing: 0.06em;
-  margin-top: 6px;
+  margin-top: 8px;
   padding: 4px 8px;
   text-transform: uppercase;
 }
