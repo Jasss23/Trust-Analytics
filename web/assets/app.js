@@ -264,7 +264,6 @@ function AskWorkspace() {
     return () => clearInterval(timer);
   }, [run?.id, run?.status]);
 
-  const [appliedChip, setAppliedChip] = React.useState(null);
   const setField = (key, value) => setFields(current => ({ ...current, [key]: value }));
   const confirmField = key => {
     const value = shape?.fields?.[key];
@@ -278,16 +277,14 @@ function AskWorkspace() {
     });
     setRun(data);
   };
-  const applySuggestion = (label, key, value, fieldLabel) => {
-    setField(key, value);
-    setAppliedChip({ label, fieldLabel });
-    setTimeout(() => setAppliedChip(current => current?.label === label ? null : current), 1400);
-  };
   const suggestions = [
     ["Focus on growth priority", "businessObjective", "Prioritise the next growth focus", "Business objective"],
     ["Add source caveat", "desiredOutput", "Decision pack with source caveat", "Desired output"],
     ["Compare by asset class", "dimension", "Asset class", "Dimension"],
   ];
+  const toggleSuggestion = (key, value) => {
+    setField(key, fields[key] === value ? "" : value);
+  };
   const objectiveValue = fields.businessObjective || shape?.fields?.businessObjective || "";
   const periodValue = fields.period || shape?.fields?.period || "";
   const segmentValue = fields.segment || shape?.fields?.segment || "";
@@ -323,14 +320,16 @@ function AskWorkspace() {
         h("div", { className: "suggestion-row" },
           h(Icon, { name: "spark" }),
           suggestions.map(([label, key, value, fieldLabel]) => {
-            const active = appliedChip?.label === label;
+            const active = fields[key] === value;
             return h("button", {
-              className: active ? "suggestion-chip applied" : "suggestion-chip",
+              className: active ? "suggestion-chip active" : "suggestion-chip",
               key: label,
-              onClick: () => applySuggestion(label, key, value, fieldLabel)
+              type: "button",
+              title: active ? `Click to clear ${fieldLabel}` : `Apply to ${fieldLabel}`,
+              onClick: () => toggleSuggestion(key, value)
             },
               active ? h(Icon, { name: "check" }) : null,
-              active ? `Applied to ${appliedChip.fieldLabel}` : label
+              label
             );
           }),
           h("button", { className: "suggestion-chip examples", onClick: () => navigate("/library") },

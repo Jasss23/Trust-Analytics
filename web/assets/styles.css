@@ -3538,17 +3538,27 @@ pre {
   transition: transform 140ms ease;
 }
 
-/* U2: Suggestion chip applied feedback */
-.suggestion-chip.applied {
-  background: var(--wash-teal);
-  border-color: var(--teal);
-  color: var(--teal);
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+/* V2: Suggestion chip persistent toggle */
+.suggestion-chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
-.suggestion-chip.applied svg {
+.suggestion-chip.active {
+  background: var(--wash-blue);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.suggestion-chip.active svg {
   height: 14px;
   width: 14px;
+}
+
+.suggestion-chip:hover {
+  transform: none;
 }
 
 /* U1: Topbar polish + help drawer + field hint */
