@@ -3424,6 +3424,124 @@ pre {
   color: var(--amber);
 }
 
+/* V3: Field hint hover card + clear control polish */
+.field-hint {
+  position: relative;
+}
+
+.hint-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(17, 26, 44, 0.12);
+  color: var(--ink);
+  cursor: default;
+  left: 50%;
+  max-width: 320px;
+  min-width: 240px;
+  padding: 14px 16px;
+  position: absolute;
+  top: 24px;
+  transform: translateX(-12px);
+  z-index: 40;
+}
+
+.hint-card::before {
+  background: #fff;
+  border-left: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  content: "";
+  height: 10px;
+  left: 16px;
+  position: absolute;
+  top: -6px;
+  transform: rotate(45deg);
+  width: 10px;
+}
+
+.hint-card-title {
+  color: var(--blue);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.hint-card-body {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.hint-card-example {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.clear-control {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  margin: 0 2px;
+  min-height: 0;
+  padding: 0;
+  width: 22px;
+}
+
+.clear-control:hover {
+  background: var(--wash-red);
+  color: var(--red);
+  transform: none;
+}
+
+.clear-control svg {
+  height: 13px;
+  width: 13px;
+}
+
+.token-x {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  margin: 0 -2px 0 2px;
+  min-height: 0;
+  padding: 0;
+  width: 18px;
+}
+
+.token-x:hover {
+  background: rgba(13, 99, 206, 0.12);
+  transform: none;
+}
+
+.optional-control-inner {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.optional-control-inner > span:first-child {
+  flex: 1 1 auto;
+}
+
 /* V1: Ask greeting */
 .ask-greeting {
   margin: 4px 0 24px;

@@ -506,13 +506,45 @@ function InspectorCard({ kicker, title, body, badges = [], action }) {
 }
 
 const FIELD_HINTS = {
-  "Business objective": "The decision this answer should support. The agent maps it to a verified analysis path.",
-  "Time period": "The window the result should cover. Use a segment chip or pick a custom range.",
-  "Object / segment": "What population or transaction set to score (e.g. completed trading activity).",
-  "Dimension": "The slicing axis applied to the metric (e.g. asset class, region, source).",
-  "Audience": "Who the decision pack is for. Drives recommendation tone and packaging.",
-  "Desired output": "The artifact you want produced — deck, brief, extract, or audit report.",
+  "Business objective": {
+    title: "Business objective",
+    body: "The decision this answer should support. The agent uses it to pick a verified analysis path and frame the recommendation.",
+    example: "e.g. Prioritise the next growth focus.",
+  },
+  "Time period": {
+    title: "Time period",
+    body: "The window the result should cover. Pick a quick segment, or use the calendar for a custom start/end month.",
+    example: "e.g. October 2025, or October to December 2025.",
+  },
+  "Object / segment": {
+    title: "Object / segment",
+    body: "What population or transaction set to score. Keeps the SQL focused on the right slice.",
+    example: "e.g. Completed trading activity.",
+  },
+  "Dimension": {
+    title: "Comparison dimension",
+    body: "The slicing axis the metric will be broken down by in the result.",
+    example: "e.g. Asset class, region, source.",
+  },
+  "Audience": {
+    title: "Decision audience",
+    body: "Who the decision pack is written for. Drives recommendation tone, packaging, and exec-ready phrasing.",
+    example: "e.g. Leadership, Finance, Growth team.",
+  },
+  "Desired output": {
+    title: "Desired output",
+    body: "The artifact you want produced from the validated run.",
+    example: "e.g. Decision pack, executive slide, email brief, CSV extract.",
+  },
 };
+
+function HintHoverCard({ hint, onClose }) {
+  return h("div", { className: "hint-card", role: "tooltip", onMouseEnter: () => {} },
+    h("div", { className: "hint-card-title" }, hint.title),
+    h("p", { className: "hint-card-body" }, hint.body),
+    hint.example ? h("p", { className: "hint-card-example" }, hint.example) : null
+  );
+}
 
 const CALENDAR_PRESETS = [
   "August 2025",
@@ -539,14 +571,25 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
   const displayValue = value || placeholder || "Not set";
   const uniqueOptions = Array.from(new Set(options.filter(Boolean)));
   const status = state?.status || (value ? "confirmed" : "missing");
-  const hint = FIELD_HINTS[label] || `Help the agent infer ${label.toLowerCase()}.`;
+  const hint = FIELD_HINTS[label] || { title: label, body: `Help the agent infer ${label.toLowerCase()}.` };
   const [open, setOpen] = React.useState(false);
   const [calendarOpen, setCalendarOpen] = React.useState(false);
+  const [hintOpen, setHintOpen] = React.useState(false);
   const wrapRef = React.useRef(null);
+  const hintTimerRef = React.useRef(null);
   useClickOutside(wrapRef, () => {
     if (open) setOpen(false);
     if (calendarOpen) setCalendarOpen(false);
   });
+  const showHint = () => {
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    setHintOpen(true);
+  };
+  const hideHint = () => {
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => setHintOpen(false), 120);
+  };
+  React.useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); }, []);
   const pickAndClose = option => {
     onPick(option);
     setOpen(false);
@@ -565,7 +608,18 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
     h("div", { className: "field-label" },
       h(Icon, { name: icon || "target" }),
       h("span", null, label),
-      h("span", { className: "field-hint", title: hint, "aria-label": hint }, h(Icon, { name: "info" }))
+      h("span", {
+        className: hintOpen ? "field-hint open" : "field-hint",
+        "aria-label": hint.title,
+        onMouseEnter: showHint,
+        onMouseLeave: hideHint,
+        onFocus: showHint,
+        onBlur: hideHint,
+        tabIndex: 0,
+      },
+        h(Icon, { name: "info" }),
+        hintOpen ? h(HintHoverCard, { hint }) : null
+      )
     ),
     h("div", { className: "field-control-wrap" },
       h(FieldControl, {
@@ -631,29 +685,63 @@ function FieldControl({ mode, value, displayValue, options, tokens, onPick, onCl
     );
   }
   if (mode === "tokens") {
-    return h("button", { className: "token-control", type: "button", onClick: onToggleDropdown },
+    return h("div", {
+      className: "token-control",
+      role: "button",
+      tabIndex: 0,
+      onClick: onToggleDropdown,
+      onKeyDown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleDropdown(); } },
+    },
       h("span", { className: "token-list" },
         tokens.filter(Boolean).slice(0, 3).map(token => h("span", { className: "input-token", key: token },
           token,
-          h("span", { className: "token-x", onClick: e => { e.stopPropagation(); onClear?.(); } }, h(Icon, { name: "close" }))
+          h("button", {
+            type: "button",
+            className: "token-x",
+            "aria-label": `Clear ${token}`,
+            onClick: e => { e.stopPropagation(); onClear?.(); },
+          }, h(Icon, { name: "close" }))
         ))
       ),
       h("span", { className: dropdownOpen ? "control-chevron flip" : "control-chevron" }, h(Icon, { name: "chevron" }))
     );
   }
   if (mode === "optional") {
-    return h("div", { className: value ? "optional-control filled" : "optional-control empty" },
-      h("button", { type: "button", onClick: onToggleDropdown },
+    return h("div", {
+      className: value ? "optional-control filled" : "optional-control empty",
+      role: "button",
+      tabIndex: 0,
+      onClick: onToggleDropdown,
+      onKeyDown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleDropdown(); } },
+    },
+      h("div", { className: "optional-control-inner" },
         h("span", null, displayValue),
-        h(Icon, { name: "chevron" })
+        value ? h("button", {
+          type: "button",
+          className: "clear-control",
+          "aria-label": "Clear",
+          onClick: e => { e.stopPropagation(); onClear?.(); },
+        }, h(Icon, { name: "close" })) : null,
+        h("span", { className: dropdownOpen ? "control-chevron flip" : "control-chevron" }, h(Icon, { name: "chevron" }))
       )
     );
   }
-  return h("button", { className: "select-control", type: "button", onClick: onToggleDropdown },
+  return h("div", {
+    className: "select-control",
+    role: "button",
+    tabIndex: 0,
+    onClick: onToggleDropdown,
+    onKeyDown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleDropdown(); } },
+  },
     h(Icon, { name: "target" }),
     h("span", { className: value ? "" : "placeholder" }, displayValue),
-    value ? h("span", { className: "clear-control", onClick: e => { e.stopPropagation(); onClear?.(); } }, h(Icon, { name: "close" })) : null,
-    h(Icon, { name: "chevron" })
+    value ? h("button", {
+      type: "button",
+      className: "clear-control",
+      "aria-label": "Clear",
+      onClick: e => { e.stopPropagation(); onClear?.(); },
+    }, h(Icon, { name: "close" })) : null,
+    h("span", { className: dropdownOpen ? "control-chevron flip" : "control-chevron" }, h(Icon, { name: "chevron" }))
   );
 }
 
