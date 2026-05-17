@@ -83,6 +83,7 @@ function App() {
 }
 
 function Layout({ active, children }) {
+  const [helpOpen, setHelpOpen] = React.useState(false);
   return h("div", { className: "shell" },
     h("header", { className: "topbar" },
       h("div", { className: "topbar-left" },
@@ -94,10 +95,7 @@ function Layout({ active, children }) {
           )
         ),
         h("span", { className: "brand-divider" }),
-        h("button", { className: "workspace-switch", type: "button", onClick: () => navigate("/") },
-          "Ask workspace",
-          h(Icon, { name: "chevron" })
-        ),
+        h("span", { className: "workspace-label" }, "Ask workspace"),
         h("span", { className: "verified-chip" }, h(Icon, { name: "checkCircle" }), "SQL-backed")
       ),
       h("div", { className: "topbar-right" },
@@ -108,21 +106,50 @@ function Layout({ active, children }) {
           h(NavLink, { active: active === "review", href: `/review/${HERO_ID}` }, "Evidence room"),
           h(NavLink, { active: active === "admin", href: "/admin/costs" }, "Admin")
         ),
-        h("a", { className: "help-link", href: "#help", onClick: e => e.preventDefault() },
+        h("button", { className: "help-link", type: "button", onClick: () => setHelpOpen(true) },
           h(Icon, { name: "info" }),
           "Help"
         ),
         h("span", { className: "user-menu" },
-          h("span", { className: "avatar" }, "MK"),
+          h("span", { className: "avatar" }, "JP"),
           h("span", null,
-            h("strong", null, "Maya Kim"),
-            h("small", null, "BD Chief of Staff")
-          ),
-          h(Icon, { name: "chevron" })
+            h("strong", null, "Jiashun Pang"),
+            h("small", null, "AI Engineer")
+          )
         )
       )
     ),
-    h("main", { className: "page" }, children)
+    h("main", { className: "page" }, children),
+    helpOpen ? h(HelpDrawer, { onClose: () => setHelpOpen(false) }) : null
+  );
+}
+
+function HelpDrawer({ onClose }) {
+  const steps = [
+    ["Ask", "Type a messy business question; the agent shapes it into guided fields."],
+    ["Shape", "Confirm or override inferred objective, time period, segment, and audience."],
+    ["Validate", "The pipeline runs read-only SQL, source reconciliation, and QA, with a verified-cache fallback."],
+    ["Package", "Export the decision pack: PPT, CSV, executive summary, and evidence appendix."],
+  ];
+  return h("aside", { className: "drawer help-drawer" },
+    h("div", { className: "drawer-head" },
+      h("div", null,
+        h("span", { className: "kicker" }, "Help"),
+        h("h2", null, "Trust Analytics flow")
+      ),
+      h("button", { className: "icon-button", onClick: onClose, title: "Close" }, h(Icon, { name: "close" }))
+    ),
+    h("p", { className: "muted" }, "Every analysis traces back to verified SQL and lives behind a clear status (Ready / Use with context / Audit required)."),
+    h("ol", { className: "help-steps" },
+      steps.map(([title, body], idx) => h("li", { key: title },
+        h("span", { className: "help-step-num" }, String(idx + 1).padStart(2, "0")),
+        h("div", null,
+          h("strong", null, title),
+          h("p", null, body)
+        )
+      ))
+    ),
+    h("p", { className: "muted help-foot" }, "Tip: open the Library to see seed cases. The Evidence room exposes SQL, source comparison, and QA layers when an analyst needs to challenge a result.")
   );
 }
 
@@ -484,16 +511,26 @@ function InspectorCard({ kicker, title, body, badges = [], action }) {
   );
 }
 
+const FIELD_HINTS = {
+  "Business objective": "The decision this answer should support. The agent maps it to a verified analysis path.",
+  "Time period": "The window the result should cover. Use a segment chip or pick a custom range.",
+  "Object / segment": "What population or transaction set to score (e.g. completed trading activity).",
+  "Dimension": "The slicing axis applied to the metric (e.g. asset class, region, source).",
+  "Audience": "Who the decision pack is for. Drives recommendation tone and packaging.",
+  "Desired output": "The artifact you want produced — deck, brief, extract, or audit report.",
+};
+
 function FieldRow({ icon, label, mode = "select", value, placeholder, options = [], tokens = [], state, onPick, onClear, onConfirm }) {
   const displayValue = value || placeholder || "Not set";
   const uniqueOptions = Array.from(new Set(options.filter(Boolean)));
   const status = state?.status || (value ? "confirmed" : "missing");
   const visibleOptions = uniqueOptions.filter(option => option !== value).slice(0, 4);
+  const hint = FIELD_HINTS[label] || `Help the agent infer ${label.toLowerCase()}.`;
   return h("div", { className: "field-row" },
     h("div", { className: "field-label" },
       h(Icon, { name: icon || "target" }),
       h("span", null, label),
-      h(Icon, { name: "info" })
+      h("span", { className: "field-hint", title: hint, "aria-label": hint }, h(Icon, { name: "info" }))
     ),
     h("div", { className: "field-control-wrap" },
       h(FieldControl, { mode, value, displayValue, options: uniqueOptions, tokens, onPick, onClear }),

@@ -3424,6 +3424,97 @@ pre {
   color: var(--amber);
 }
 
+/* U1: Topbar polish + help drawer + field hint */
+.workspace-label {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.help-link {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.help-link:hover {
+  background: var(--soft);
+  border-radius: 7px;
+}
+
+.field-hint {
+  align-items: center;
+  color: var(--muted);
+  cursor: help;
+  display: inline-flex;
+  height: 16px;
+  width: 16px;
+}
+
+.field-hint:hover {
+  color: var(--blue);
+}
+
+.user-menu {
+  align-items: center;
+  display: inline-flex;
+  gap: 10px;
+}
+
+.drawer.help-drawer {
+  max-width: 440px;
+  padding: 26px 28px 32px;
+}
+
+.help-drawer .help-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+
+.help-drawer .help-steps li {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 36px 1fr;
+}
+
+.help-drawer .help-step-num {
+  align-items: center;
+  background: var(--wash-blue);
+  border-radius: 999px;
+  color: var(--blue);
+  display: inline-flex;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.help-drawer .help-steps strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.help-drawer .help-steps p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+.help-drawer .help-foot {
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  margin-top: 22px;
+  padding-top: 16px;
+}
+
 /* C3: Library empty state for validated free asks */
 .empty-library {
   align-items: center;
