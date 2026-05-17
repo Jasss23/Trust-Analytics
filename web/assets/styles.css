@@ -3424,6 +3424,19 @@ pre {
   color: var(--amber);
 }
 
+/* U2: Suggestion chip applied feedback */
+.suggestion-chip.applied {
+  background: var(--wash-teal);
+  border-color: var(--teal);
+  color: var(--teal);
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.suggestion-chip.applied svg {
+  height: 14px;
+  width: 14px;
+}
+
 /* U1: Topbar polish + help drawer + field hint */
 .workspace-label {
   color: var(--ink);

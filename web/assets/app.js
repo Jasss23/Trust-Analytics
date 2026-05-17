@@ -224,11 +224,9 @@ function AskWorkspace() {
     desiredOutput: "",
   });
   const [shape, setShape] = React.useState(null);
-  const [analyses, setAnalyses] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [run, setRun] = React.useState(null);
 
-  React.useEffect(() => { api("/api/analyses").then(setAnalyses); }, []);
   React.useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -266,6 +264,7 @@ function AskWorkspace() {
     return () => clearInterval(timer);
   }, [run?.id, run?.status]);
 
+  const [appliedChip, setAppliedChip] = React.useState(null);
   const setField = (key, value) => setFields(current => ({ ...current, [key]: value }));
   const confirmField = key => {
     const value = shape?.fields?.[key];
@@ -279,10 +278,15 @@ function AskWorkspace() {
     });
     setRun(data);
   };
+  const applySuggestion = (label, key, value, fieldLabel) => {
+    setField(key, value);
+    setAppliedChip({ label, fieldLabel });
+    setTimeout(() => setAppliedChip(current => current?.label === label ? null : current), 1400);
+  };
   const suggestions = [
-    ["target", "Focus on growth priority", () => setField("businessObjective", "Prioritise the next growth focus")],
-    ["warning", "Add source caveat", () => setField("desiredOutput", "Decision pack with source caveat")],
-    ["table", "Compare by asset class", () => setField("dimension", "Asset class")],
+    ["Focus on growth priority", "businessObjective", "Prioritise the next growth focus", "Business objective"],
+    ["Add source caveat", "desiredOutput", "Decision pack with source caveat", "Desired output"],
+    ["Compare by asset class", "dimension", "Asset class", "Dimension"],
   ];
   const objectiveValue = fields.businessObjective || shape?.fields?.businessObjective || "";
   const periodValue = fields.period || shape?.fields?.period || "";
@@ -314,9 +318,17 @@ function AskWorkspace() {
         ),
         h("div", { className: "suggestion-row" },
           h(Icon, { name: "spark" }),
-          suggestions.map(([, item, onClick]) => h("button", { className: "suggestion-chip", key: item, onClick },
-            item
-          )),
+          suggestions.map(([label, key, value, fieldLabel]) => {
+            const active = appliedChip?.label === label;
+            return h("button", {
+              className: active ? "suggestion-chip applied" : "suggestion-chip",
+              key: label,
+              onClick: () => applySuggestion(label, key, value, fieldLabel)
+            },
+              active ? h(Icon, { name: "check" }) : null,
+              active ? `Applied to ${appliedChip.fieldLabel}` : label
+            );
+          }),
           h("button", { className: "suggestion-chip examples", onClick: () => navigate("/library") },
             h(Icon, { name: "search" }), "Examples"
           )
@@ -429,17 +441,6 @@ function AskWorkspace() {
           h(Icon, { name: "shield" }),
           "Open evidence room"
         )
-      )
-    ),
-    h("section", { className: "path-section" },
-      h("div", { className: "section-heading" },
-        h("div", null,
-          h("span", { className: "kicker" }, "Verified paths"),
-          h("h2", null, "Seed cases and successful validated asks live in Library")
-        )
-      ),
-      h("div", { className: "path-grid" },
-        analyses.map(a => h(VerifiedPathCard, { key: a.id, analysis: a, selected: shape?.recommendedAnalysisId === a.id }))
       )
     )
   );
@@ -707,21 +708,6 @@ function ChipField({ label, value, options, onPick }) {
         className: option === value ? "chip selected" : "chip",
         onClick: () => onPick(option)
       }, option))
-    )
-  );
-}
-
-function VerifiedPathCard({ analysis, selected }) {
-  const route = analysis.audit?.required ? `/handoff/${analysis.id}` : `/analysis/${analysis.id}`;
-  return h("article", { className: selected ? "path-card selected" : "path-card" },
-    h("div", { className: "path-card-top" },
-      h(Status, { status: analysis.status }),
-      selected ? h("span", { className: "selected-mark" }, h(Icon, { name: "check" }), "Matched") : null
-    ),
-    h("h3", null, analysis.question),
-    h("p", null, analysis.headline),
-    h("button", { className: "secondary", onClick: () => navigate(route) },
-      analysis.audit?.required ? "Open audit brief" : "Open pack"
     )
   );
 }
