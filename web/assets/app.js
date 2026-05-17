@@ -577,7 +577,7 @@ function useClickOutside(ref, onOutside) {
 function FieldRow({ icon, label, mode = "select", value, placeholder, options = [], tokens = [], state, onPick, onClear, onConfirm }) {
   const displayValue = value || placeholder || "Not set";
   const uniqueOptions = Array.from(new Set(options.filter(Boolean)));
-  const status = state?.status || (value ? "confirmed" : "missing");
+  const status = value ? (state?.status || "confirmed") : "missing";
   const hint = FIELD_HINTS[label] || { title: label, body: `Help the agent infer ${label.toLowerCase()}.` };
   const [open, setOpen] = React.useState(false);
   const [calendarOpen, setCalendarOpen] = React.useState(false);

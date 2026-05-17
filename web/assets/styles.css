@@ -2428,19 +2428,21 @@ button:hover,
 
 .select-control,
 .token-control,
-.optional-control > button,
+.optional-control,
 .segmented-control {
   background: #fff;
   border: 1px solid #d9e0e8;
   border-radius: 7px;
   box-shadow: 0 1px 2px rgba(17, 26, 44, 0.025);
   color: var(--ink);
+  cursor: pointer;
   min-height: 48px;
 }
 
 .select-control,
 .token-control,
-.optional-control > button {
+.optional-control {
+  align-items: center;
   display: flex;
   gap: 12px;
   justify-content: flex-start;
@@ -2450,7 +2452,7 @@ button:hover,
 
 .select-control:hover,
 .token-control:hover,
-.optional-control > button:hover,
+.optional-control:hover,
 .segment:hover,
 .calendar-button:hover {
   border-color: #b6c6d8;
@@ -2459,29 +2461,42 @@ button:hover,
 
 .select-control > svg:first-child {
   color: #56667a;
+  flex-shrink: 0;
   height: 19px;
   width: 19px;
 }
 
-.select-control > span:nth-child(2) {
+.select-control > span:nth-child(2),
+.optional-control-inner > span:first-child,
+.token-control .control-placeholder {
   flex: 1 1 auto;
   font-size: 16px;
   font-weight: 500;
+  overflow: hidden;
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .select-control .placeholder,
-.optional-control.empty span {
+.token-control .control-placeholder,
+.optional-control.empty .optional-control-inner > span:first-child {
   color: #9aa4b2;
   font-weight: 400;
 }
 
-.select-control > svg:last-child,
-.token-control > svg,
-.optional-control > button svg {
+.select-control > .control-chevron,
+.token-control > .control-chevron,
+.optional-control-inner > .control-chevron {
   color: #1d2738;
-  height: 17px;
+  flex-shrink: 0;
   margin-left: auto;
+}
+
+.select-control > .control-chevron svg,
+.token-control > .control-chevron svg,
+.optional-control-inner > .control-chevron svg {
+  height: 17px;
   width: 17px;
 }
 
@@ -2601,28 +2616,7 @@ button:hover,
   font-size: 14px;
 }
 
-.optional-control {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.optional-control > button {
-  font-size: 15px;
-  font-weight: 400;
-  min-height: 46px;
-  padding: 0 14px;
-}
-
-.optional-control > button span {
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.optional-control.filled > button span {
+.optional-control.filled .optional-control-inner > span:first-child {
   color: var(--ink);
   font-weight: 500;
 }
@@ -2712,7 +2706,7 @@ button:disabled {
 
 .field-control-wrap {
   display: grid;
-  gap: 8px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -2720,6 +2714,7 @@ button:disabled {
   align-items: center;
   display: flex;
   gap: 8px;
+  margin-top: 4px;
   min-height: 24px;
 }
 
@@ -3534,12 +3529,8 @@ pre {
 .optional-control-inner {
   align-items: center;
   display: flex;
-  gap: 4px;
+  gap: 8px;
   width: 100%;
-}
-
-.optional-control-inner > span:first-child {
-  flex: 1 1 auto;
 }
 
 /* V6: Dynamic flow rail states */
