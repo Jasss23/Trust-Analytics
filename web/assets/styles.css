@@ -3653,7 +3653,6 @@ pre {
   border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 16px 36px rgba(17, 26, 44, 0.12);
-  max-width: 460px;
   min-width: 280px;
   padding: 10px 0 12px;
   position: fixed;

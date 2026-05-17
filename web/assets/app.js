@@ -215,14 +215,7 @@ function Status({ status, showDescription = false }) {
 
 function AskWorkspace() {
   const [question, setQuestion] = React.useState(DEFAULT_QUESTION);
-  const [fields, setFields] = React.useState({
-    businessObjective: "",
-    period: "",
-    segment: "",
-    dimension: "",
-    audience: "",
-    desiredOutput: "",
-  });
+  const [fields, setFields] = React.useState({});
   const [shape, setShape] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [run, setRun] = React.useState(null);
@@ -285,12 +278,12 @@ function AskWorkspace() {
   const toggleSuggestion = (key, value) => {
     setField(key, fields[key] === value ? "" : value);
   };
-  const objectiveValue = fields.businessObjective || shape?.fields?.businessObjective || "";
-  const periodValue = fields.period || shape?.fields?.period || "";
-  const segmentValue = fields.segment || shape?.fields?.segment || "";
-  const dimensionValue = fields.dimension || shape?.fields?.dimension || "";
-  const audienceValue = fields.audience || shape?.fields?.audience || "";
-  const outputValue = fields.desiredOutput || shape?.fields?.desiredOutput || "";
+  const objectiveValue = fields.businessObjective ?? shape?.fields?.businessObjective ?? "";
+  const periodValue = fields.period ?? shape?.fields?.period ?? "";
+  const segmentValue = fields.segment ?? shape?.fields?.segment ?? "";
+  const dimensionValue = fields.dimension ?? shape?.fields?.dimension ?? "";
+  const audienceValue = fields.audience ?? shape?.fields?.audience ?? "";
+  const outputValue = fields.desiredOutput ?? shape?.fields?.desiredOutput ?? "";
   const states = shape?.fieldStates || {};
   const ready = Boolean(shape?.quality?.ready) && run?.status !== "running";
 
@@ -586,6 +579,7 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
   const [calendarOpen, setCalendarOpen] = React.useState(false);
   const [hintOpen, setHintOpen] = React.useState(false);
   const wrapRef = React.useRef(null);
+  const controlWrapRef = React.useRef(null);
   const hintTimerRef = React.useRef(null);
   useClickOutside(wrapRef, () => {
     if (open) setOpen(false);
@@ -631,7 +625,7 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
         hintOpen ? h(HintHoverCard, { hint }) : null
       )
     ),
-    h("div", { className: "field-control-wrap" },
+    h("div", { className: "field-control-wrap", ref: controlWrapRef },
       h(FieldControl, {
         mode,
         value,
@@ -646,7 +640,7 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
         calendarOpen,
       }),
       open && mode !== "segmented" ? h(FieldPopover, {
-        anchorRef: wrapRef,
+        anchorRef: controlWrapRef,
         label,
         options: uniqueOptions,
         value,
@@ -654,7 +648,7 @@ function FieldRow({ icon, label, mode = "select", value, placeholder, options = 
         allowCustom: true,
       }) : null,
       calendarOpen && mode === "segmented" ? h(CalendarPopover, {
-        anchorRef: wrapRef,
+        anchorRef: controlWrapRef,
         value,
         onPick: pickAndClose,
       }) : null,
@@ -675,10 +669,12 @@ function useAnchoredPosition(anchorRef, prefer = "below") {
       const rect = anchorRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
       const spaceBelow = viewportHeight - rect.bottom;
-      const wantBelow = prefer === "below" ? spaceBelow >= 280 : false;
+      const spaceAbove = rect.top;
+      // Prefer below unless cramped (<160px) and there is significantly more space above.
+      const wantBelow = prefer !== "below" ? false : !(spaceBelow < 160 && spaceAbove > spaceBelow);
       setPos({
         left: rect.left,
-        width: Math.max(rect.width, 280),
+        width: rect.width,
         top: wantBelow ? rect.bottom + 8 : null,
         bottom: wantBelow ? null : viewportHeight - rect.top + 8,
       });
