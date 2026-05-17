@@ -198,6 +198,18 @@ def smoke_script() -> str:
 
       await clickByText('Ask', 'a,button');
       await sleep(400);
+
+      const textarea = document.querySelector('textarea.command-input');
+      if (textarea) {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        setter.call(textarea, 'Can we rely on the December monthly summary GTV trend?');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        await sleep(450);
+        const chip = document.querySelector('.path-status-chip');
+        report.auditChipTone = chip?.className.match(/tone-[a-z]+/)?.[0] || null;
+        report.auditChipLabel = (chip?.textContent || '').trim();
+      }
+
       await clickByText('Library', 'a,button');
       await sleep(500);
       await clickByText('Open pack');
@@ -270,7 +282,16 @@ def run_smoke(url: str, port: int, screenshot_dir: Path) -> dict:
             "handoff": str(screenshot_dir / "handoff.png"),
         }
         missing = [item for item in result["results"] if not item.get("ok")]
-        if result.get("errors") or missing or not result.get("costDetailOpen"):
+        audit_chip_ok = (
+            result.get("auditChipLabel") == "Audit required"
+            and result.get("auditChipTone") in {"tone-critical", "tone-audit"}
+        )
+        if (
+            result.get("errors")
+            or missing
+            or not result.get("costDetailOpen")
+            or not audit_chip_ok
+        ):
             result["ok"] = False
         else:
             result["ok"] = True

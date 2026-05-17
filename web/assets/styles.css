@@ -3389,6 +3389,41 @@ pre {
   }
 }
 
+/* C1: Verified-path status chip tone variants */
+.path-status-chip {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+  text-transform: uppercase;
+}
+
+.path-status-chip svg {
+  height: 13px;
+  width: 13px;
+}
+
+.path-status-chip.tone-ready {
+  background: var(--wash-teal);
+  color: var(--teal);
+}
+
+.path-status-chip.tone-review,
+.path-status-chip.tone-caution {
+  background: var(--wash-amber);
+  color: var(--amber);
+}
+
+.path-status-chip.tone-audit,
+.path-status-chip.tone-critical {
+  background: var(--wash-amber);
+  color: var(--amber);
+}
+
 /* B3: Handoff audit chip + cost card polish */
 .audit-hero-row {
   align-items: center;

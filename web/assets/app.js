@@ -161,6 +161,20 @@ function Icon({ name }) {
   return h("svg", common, ...(paths[name] || paths.check));
 }
 
+function PathStatusChip({ status }) {
+  const tone = status?.tone || "ready";
+  const label = status?.label || "SQL-backed";
+  const iconName = tone === "critical" || tone === "audit"
+    ? "warning"
+    : tone === "caution" || tone === "review"
+      ? "info"
+      : "checkCircle";
+  return h("span", { className: `path-status-chip tone-${tone}` },
+    h(Icon, { name: iconName }),
+    label
+  );
+}
+
 function Status({ status, showDescription = false }) {
   const tone = status?.tone || "review";
   return h("div", { className: `status-block tone-${tone}` },
@@ -370,7 +384,7 @@ function AskWorkspace() {
         h("div", { className: "inspector-section" },
           h("div", { className: "section-minihead" },
             h("span", { className: "kicker" }, "Verified analysis path"),
-            h("span", { className: "status-mini" }, "SQL-backed")
+            h(PathStatusChip, { status: shape?.verifiedPath?.status })
           ),
           h("strong", null, shape?.recommendedAnalysisTitle || "Asset-class growth priority pack"),
           h("p", null, shape?.verifiedPath?.reason || "Matched to a known-good evidence pack."),
