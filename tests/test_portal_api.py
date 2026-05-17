@@ -83,6 +83,24 @@ def test_question_shape_matches_clear_asset_class_question() -> None:
     assert data["quality"]["label"] in {"Ready to validate", "Needs confirmation"}
 
 
+def test_question_shape_marks_audience_and_output_missing_when_not_supplied() -> None:
+    response = client.post(
+        "/api/question/shape",
+        json={
+            "question_text": "Which asset class should we prioritise for growth in October 2025?",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["fieldStates"]["audience"]["status"] == "missing"
+    assert data["fieldStates"]["desiredOutput"]["status"] == "missing"
+    assert data["fields"]["audience"] == ""
+    assert data["fields"]["desiredOutput"] == ""
+    assert data["quality"]["ready"] is False
+    assert data["quality"]["score"] <= 67
+
+
 def test_question_shape_flags_missing_period() -> None:
     response = client.post(
         "/api/question/shape",

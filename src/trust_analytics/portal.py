@@ -485,8 +485,8 @@ def _infer_ask_fields(
         "period": selected_period,
         "segment": selected_segment,
         "dimension": selected_dimension,
-        "audience": audience or "Leadership",
-        "desiredOutput": desired_output or "Decision pack",
+        "audience": audience or "",
+        "desiredOutput": desired_output or "",
     }
 
 
