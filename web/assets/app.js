@@ -3,6 +3,7 @@ const HERO_ID = "q1_gtv_idr_by_asset_oct_2025";
 const AUDIT_ID = "q5_gtv_mom_trend_oct_dec_2025";
 
 const DEFAULT_QUESTION = "Which asset class should we prioritise for next month's growth plan?";
+const ASK_SESSION_KEY = "trust-analytics.ask-session.v1";
 
 const ACTIONS = [
   { key: "ppt", label: "Generate PPT", detail: "Main slide + evidence appendix", icon: "presentation" },
@@ -70,6 +71,31 @@ function shapePayload(question, fields) {
     audience: fields.audience,
     desired_output: fields.desiredOutput,
   };
+}
+
+function loadAskSession() {
+  try {
+    const raw = window.sessionStorage.getItem(ASK_SESSION_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveAskSession(next) {
+  try {
+    window.sessionStorage.setItem(ASK_SESSION_KEY, JSON.stringify(next));
+  } catch {
+    // Session restore is a UX convenience; storage failures should not block asking.
+  }
+}
+
+function clearAskSession() {
+  try {
+    window.sessionStorage.removeItem(ASK_SESSION_KEY);
+  } catch {
+    // No-op.
+  }
 }
 
 function App() {
@@ -214,12 +240,13 @@ function Status({ status, showDescription = false }) {
 }
 
 function AskWorkspace() {
-  const [question, setQuestion] = React.useState(DEFAULT_QUESTION);
-  const [fields, setFields] = React.useState({});
-  const [shape, setShape] = React.useState(null);
+  const restored = React.useMemo(loadAskSession, []);
+  const [question, setQuestion] = React.useState(restored.question || DEFAULT_QUESTION);
+  const [fields, setFields] = React.useState(restored.fields || {});
+  const [shape, setShape] = React.useState(restored.shape || null);
   const [llmStatus, setLlmStatus] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
-  const [run, setRun] = React.useState(null);
+  const [run, setRun] = React.useState(restored.run || null);
   const [highlightedField, setHighlightedField] = React.useState(null);
 
   React.useEffect(() => {
@@ -228,6 +255,10 @@ function AskWorkspace() {
       message: "Could not read live LLM status.",
     }));
   }, []);
+
+  React.useEffect(() => {
+    saveAskSession({ question, fields, shape, run });
+  }, [question, JSON.stringify(fields), JSON.stringify(shape), JSON.stringify(run)]);
 
   React.useEffect(() => {
     if (!question.trim()) {
@@ -320,7 +351,9 @@ function AskWorkspace() {
             onClick: () => {
               setQuestion("");
               setFields({});
+              setShape(null);
               setRun(null);
+              clearAskSession();
             }
           },
             h(Icon, { name: "close" }),
@@ -350,6 +383,7 @@ function AskWorkspace() {
             }, h(Icon, { name: "arrow" }))
           )
         ),
+        h(LiveRunBanner, { run }),
         h("div", { className: "suggestion-row" },
           h(Icon, { name: "spark" }),
           amendments.map(amendment => h("button", {
@@ -493,7 +527,7 @@ function journeyState({ shape, run, ready, active }) {
   return { currentStep: 0, completedThrough: -1, packageLabel: "Package" };
 }
 
-function FlowRail({ shape, run, ready, active = "ask" }) {
+function FlowRail({ shape, run, ready, active = "ask", packageRoute }) {
   const state = journeyState({ shape, run, ready, active });
   const blocked = shape?.criticalMissingFields?.[0]?.label
     ? `Add ${shape.criticalMissingFields[0].label.toLowerCase()}`
@@ -522,7 +556,9 @@ function FlowRail({ shape, run, ready, active = "ask" }) {
         if (ready) btn.focus();
       }
     } else if (step === 3) {
-      if (run?.status === "audit_required" && run?.resultId) {
+      if (packageRoute) {
+        navigate(packageRoute);
+      } else if (run?.status === "audit_required" && run?.resultId) {
         navigate(`/handoff/${run.resultId}`);
       } else if (run?.status === "completed" && run?.resultId) {
         navigate(`/analysis/${run.resultId}`);
@@ -531,7 +567,7 @@ function FlowRail({ shape, run, ready, active = "ask" }) {
   };
   const packageReady = ["completed", "audit_required"].includes(run?.status) && Boolean(run?.resultId);
   const stepEnabled = step => {
-    if (active !== "ask") return step === 0 || step === 3;
+    if (active !== "ask") return step === 0 || (step === 3 && Boolean(packageRoute));
     if (step === 3) return packageReady;
     if (step <= state.currentStep) return true;
     if (step === state.currentStep + 1) return true;
@@ -572,13 +608,13 @@ function FlowRail({ shape, run, ready, active = "ask" }) {
   );
 }
 
-function WorkspaceRail({ active }) {
-  return h(FlowRail, { active, ready: active !== "ask" });
+function WorkspaceRail({ active, packageRoute }) {
+  return h(FlowRail, { active, ready: active !== "ask", packageRoute });
 }
 
-function SubpageWorkspace({ active, children, inspector }) {
+function SubpageWorkspace({ active, children, inspector, packageRoute }) {
   return h("section", { className: `subpage-workspace subpage-${active}` },
-    h(WorkspaceRail, { active }),
+    h(WorkspaceRail, { active, packageRoute }),
     h("div", { className: "subpage-main" }, children),
     inspector ? h("aside", { className: "inspector-panel subpage-inspector" }, inspector) : null
   );
@@ -1019,6 +1055,36 @@ function LlmStatusCard({ status }) {
   );
 }
 
+function LiveRunBanner({ run }) {
+  if (!run || run.status !== "running") return null;
+  const stages = run.stages || [];
+  const currentIndex = Math.max(0, stages.findIndex(stage => stage.state === "current"));
+  const current = stages[currentIndex] || stages[0] || { label: "Validating live run", state: "current" };
+  const doneCount = stages.filter(stage => stage.state === "done").length;
+  const total = stages.length || 1;
+  const progress = Math.max(10, Math.min(92, Math.round((doneCount / total) * 100)));
+  const currentLabel = current.label === "Pre-flight checks"
+    ? "Running pre-flight checks"
+    : current.label;
+  const detail = current.label === "Pre-flight checks"
+    ? "The agent is checking SQL safety, semantic fit, and data quality. This can take a few seconds."
+    : "Keep this page open while the live agent chain prepares the decision pack.";
+  return h("section", { className: "live-run-banner", role: "status", "aria-live": "polite" },
+    h("div", { className: "run-pulse", "aria-hidden": "true" }, h("span", null)),
+    h("div", { className: "run-banner-copy" },
+      h("span", { className: "kicker" }, "Live validation running"),
+      h("strong", null, currentLabel),
+      h("p", null, detail)
+    ),
+    h("div", { className: "run-progress" },
+      h("span", null, `${doneCount}/${total}`),
+      h("div", { className: "run-progress-track" },
+        h("span", { style: { width: `${progress}%` } })
+      )
+    )
+  );
+}
+
 function RunResultPreview({ run }) {
   if (!run || run.status === "running") return null;
   if (run.status === "needs_clarification") {
@@ -1374,6 +1440,7 @@ function AnalysisPage({ id }) {
 
   return h(SubpageWorkspace, {
     active: "analysis",
+    packageRoute: `/analysis/${analysis.id}`,
     inspector: h("aside", { className: "pack-actions", id: "review" },
       h("span", { className: "kicker" }, analysis.decisionPack?.title || "Decision pack"),
       h("h2", null, "Package this analysis"),
@@ -1416,7 +1483,17 @@ function AnalysisPage({ id }) {
           h("span", { className: "kicker" }, "Decision summary"),
           h("p", { className: "question-line" }, analysis.question),
           h("h1", null, analysis.headline),
-          h("p", { className: "recommendation-text" }, analysis.recommendation)
+          h("p", { className: "recommendation-text" }, analysis.recommendation),
+          h("div", { className: "summary-focus" },
+            h("div", null,
+              h("span", null, "Recommended use"),
+              h("strong", null, analysis.useThisFor)
+            ),
+            h("div", null,
+              h("span", null, "Boundary"),
+              h("strong", null, analysis.doNotUseFor)
+            )
+          )
         ),
         h("section", { className: "chart-card focus-chart", id: "package" },
           h("div", { className: "module-head" },
@@ -1547,8 +1624,10 @@ function ReviewPage({ id }) {
   const ev = analysis.analystEvidence;
   const source = ev.source || {};
   const systemError = analysis.status?.label === "Audit required" && ev.sql === "" && !ev.source;
+  const auditRequired = analysis.status?.label === "Audit required";
   return h(SubpageWorkspace, {
     active: "review",
+    packageRoute: auditRequired ? `/handoff/${analysis.id}` : `/analysis/${analysis.id}`,
     inspector: [
       h("div", { key: "status", className: "inspector-section quality-section" },
         h("div", { className: "section-minihead" },
@@ -1580,25 +1659,72 @@ function ReviewPage({ id }) {
       h("div", { className: "tabs" },
         ["source", "sql", "qa", "challenge"].map(item => h("button", { className: tab === item ? "tab active" : "tab", onClick: () => setTab(item), key: item }, titleCase(item)))
       ),
-      tab === "source" ? systemError ? h(SystemErrorEvidence, { analysis }) : h("div", { className: "evidence-card" },
-          h("span", { className: "kicker" }, "Source provenance"),
-          h("h2", null, source.primary_table || "Unknown source"),
-          h("p", null, source.why_chosen || "No source rationale available."),
-          h(SourceTable, { rows: analysis.sourceComparison })
-        ) : null,
-      tab === "sql" ? h("div", { className: "evidence-card" },
+      tab === "source" ? systemError ? h(SystemErrorEvidence, { analysis }) : h(SourceEvidence, { source, rows: analysis.sourceComparison }) : null,
+      tab === "sql" ? h("div", { className: "evidence-card code-card" },
         h("span", { className: "kicker" }, "Executed SQL"),
-        h("pre", null, ev.sql)
+        h(SqlCodeBlock, { sql: ev.sql })
       ) : null,
       tab === "qa" ? h("div", { className: "evidence-card" },
         h("span", { className: "kicker" }, "Quality checks"),
         h(ConfidenceGrid, { confidence: analysis.confidence })
       ) : null,
-      tab === "challenge" ? h("div", { className: "evidence-card" },
+      tab === "challenge" ? h("div", { className: "evidence-card structured-card" },
         h("span", { className: "kicker" }, "Challenge notes"),
-        h("ul", { className: "evidence-list" }, analysis.executiveSummary.map((item, idx) => h("li", { key: idx }, item)))
+        h(StructuredNotes, { items: analysis.executiveSummary })
       ) : null
     )
+  );
+}
+
+function SourceEvidence({ source, rows }) {
+  const rationale = source.why_chosen || "No source rationale available.";
+  const sections = [
+    ["Why this source", rationale.split(" Filters: ")[0]],
+    ["Filters", rationale.includes(" Filters: ") ? rationale.split(" Filters: ")[1].split(" Aggregator: ")[0] : ""],
+    ["Aggregation", rationale.includes(" Aggregator: ") ? rationale.split(" Aggregator: ")[1] : ""],
+  ].filter(([, value]) => value);
+  return h("div", { className: "evidence-card structured-card" },
+    h("span", { className: "kicker" }, "Source provenance"),
+    h("h2", null, source.primary_table || "Unknown source"),
+    h("div", { className: "source-rationale-grid" },
+      sections.map(([label, value]) => h("article", { key: label },
+        h("span", null, label),
+        h("p", null, value)
+      ))
+    ),
+    h(SourceTable, { rows })
+  );
+}
+
+function SqlCodeBlock({ sql }) {
+  const text = sql || "-- No SQL was produced for this run.";
+  const pattern = /\b(SELECT|FROM|WHERE|GROUP BY|ORDER BY|LIMIT|JOIN|LEFT JOIN|INNER JOIN|ON|WITH|AS|SUM|COUNT|AVG|CASE|WHEN|THEN|ELSE|END|AND|OR|DATE|CAST|ROUND|DESC|ASC)\b/gi;
+  const parts = [];
+  let last = 0;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    parts.push(h("span", { className: "sql-keyword", key: `${match.index}-${match[0]}` }, match[0]));
+    last = pattern.lastIndex;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return h("pre", { className: "sql-code" }, h("code", null, parts));
+}
+
+function StructuredNotes({ items = [] }) {
+  return h("div", { className: "structured-notes" },
+    items.map((item, idx) => {
+      const [lead, ...rest] = String(item).split(/:\s+/);
+      const body = rest.length ? rest.join(": ") : item;
+      return h("article", { className: "note-row", key: idx },
+        h("span", { className: "note-index" }, String(idx + 1).padStart(2, "0")),
+        h("p", null,
+          rest.length ? h("strong", null, lead) : null,
+          rest.length ? " — " : null,
+          body
+        )
+      );
+    })
   );
 }
 
@@ -1639,6 +1765,7 @@ function HandoffPage({ id }) {
   const audit = analysis.audit;
   return h(SubpageWorkspace, {
     active: "handoff",
+    packageRoute: `/handoff/${analysis.id}`,
     inspector: [
       h("div", { key: "audit", className: "inspector-section quality-section" },
         h("div", { className: "section-minihead" },
