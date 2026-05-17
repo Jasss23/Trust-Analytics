@@ -3651,7 +3651,11 @@ pre {
 }
 
 .field-popover-calendar {
-  padding: 14px 16px 16px;
+  padding: 16px 18px 14px;
+}
+
+.field-popover-calendar .field-popover-head {
+  padding: 0 0 10px;
 }
 
 .popover-search {
@@ -3692,9 +3696,8 @@ pre {
 
 .calendar-grid {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: 1fr 1fr;
-  margin-top: 4px;
 }
 
 .calendar-input {
@@ -3715,11 +3718,12 @@ pre {
 .calendar-input input[type="month"] {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--ink);
   font-family: inherit;
   font-size: 13px;
-  padding: 8px 10px;
+  min-height: 36px;
+  padding: 6px 8px;
 }
 
 .calendar-input input[type="month"]:focus {
@@ -3730,28 +3734,37 @@ pre {
 
 .calendar-current {
   color: var(--muted);
-  font-size: 12px;
-  margin: 10px 0 0;
+  font-size: 11px;
+  margin: 12px 0 0;
 }
 
 .calendar-actions {
+  border-top: 1px solid var(--line);
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  margin-top: 12px;
+  margin: 14px -18px 0;
+  padding: 12px 18px 0;
 }
 
 .calendar-actions button {
-  border-radius: 7px;
-  font-size: 13px;
-  min-height: 36px;
-  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 32px;
+  padding: 0 12px;
 }
 
 .calendar-actions .secondary {
   background: #fff;
   border-color: var(--line);
   color: var(--muted);
+}
+
+.calendar-actions .secondary:hover {
+  background: var(--soft);
+  border-color: #b6c6d8;
+  color: var(--ink);
 }
 
 .calendar-actions .primary {
