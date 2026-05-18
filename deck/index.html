@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trust Analytics Workflow</title>
+
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/slides.css" />
+
+  <script type="application/json" id="speaker-notes">
+[
+  "Start with the trust question: AI can produce analysis, but can the business safely act on it?",
+  "Use the multi-asset promotion example to make the trust gap concrete: SQL and charts are useful, but teams still need table, transaction, and source checks.",
+  "Frame chat as the ideal starting point, then explain why production analytics needs control points around the model.",
+  "Present the workflow as a control system: ask, shape, validate, route. The model does not just return text; the product creates a safe next action.",
+  "Zoom into routing. A validated answer becomes a trust state: safe, needs evidence, or blocked.",
+  "Explain the main design decision: one analysis needs three product surfaces because three users ask different trust questions.",
+  "Use the screenshots as product proof: the workflow appears as decision, evidence, and escalation screens.",
+  "Make the thesis explicit: UX is not decoration. It narrows the model task and exposes uncertainty.",
+  "Close the main story: trusted AI analytics needs answer, evidence, action, and escalation.",
+  "Appendix A: show that the UI reads a structured product contract, not raw LLM prose.",
+  "Appendix B: show the call path and emphasise explicit cache, failure, and audit states.",
+  "Appendix C: show production guardrails: read-only SQL, pre-flight, source reconciliation, audit-first failure, exports, and telemetry."
+]
+  </script>
+</head>
+<body>
+  <deck-stage width="1920" height="1080" no-rail>
+
+    <section class="slide-dark s-cover" data-label="01 Trust Analytics Workflow">
+      <div class="backdrop"></div>
+      <span class="ico glyph" data-icon="shield-check" data-size="720" aria-hidden="true"></span>
+
+      <div class="brand-row">
+        <div class="brand">
+          <span class="logo"><span data-icon="shield-check"></span></span>
+          <span>Trust Analytics</span>
+        </div>
+        <span class="meta-pill"><span class="dot"></span>Trusted data decisions</span>
+      </div>
+
+      <div class="hero">
+        <span class="eyebrow"><span class="ico" data-icon="workflow"></span>AI workflow design</span>
+        <h1>Trust Analytics<br /><span class="accent">Workflow</span></h1>
+        <p class="sub">Making AI-generated analysis safe enough to act on.</p>
+      </div>
+
+      <div class="footer">
+        <div class="footline">
+          <span>Ask a business question</span>
+          <span class="sep">→</span>
+          <span>Validate the data path</span>
+          <span class="sep">→</span>
+          <span>Decide, review, or hand off</span>
+        </div>
+        <span class="arrow"><span>Start with the trust gap</span><span class="ico" data-icon="arrow-right" data-size="18"></span></span>
+      </div>
+    </section>
+
+    <section class="s-problem" data-label="02 The Trust Gap">
+      <div class="head">
+        <span class="eyebrow"><span class="ico" data-icon="message-circle-question"></span>The problem</span>
+        <h1 class="title">AI can generate SQL and charts. People still need a reason to trust them.</h1>
+      </div>
+
+      <div class="body">
+        <div class="scenario">
+          <span class="quote-mark" aria-hidden="true">&ldquo;</span>
+          <span class="scenario-label">Client context</span>
+          <p class="context-line">A multi-asset trading platform is planning next month's promotion budget across crypto, gold, FX, GSS, and options.</p>
+          <p class="hero-question">"Which asset class should we prioritise?"</p>
+          <p>The AI can generate SQL and a chart showing crypto as the strongest completed-GTV campaign focus.</p>
+          <div class="check-row">
+            <span>Which table?</span>
+            <span>Pending transactions?</span>
+            <span>Finance vs ops?</span>
+          </div>
+          <p class="closer">Without those checks, teams either over-trust the output or avoid using it.</p>
+        </div>
+
+        <div class="flow">
+          <div class="row">
+            <div class="trust-panel output-panel">
+              <span class="panel-kicker">What AI can generate</span>
+              <div class="panel-main">
+                <span class="panel-icon"><span data-icon="terminal"></span></span>
+                <h3>SQL + chart</h3>
+              </div>
+              <p>Fast, confident, and useful as a first draft.</p>
+            </div>
+
+            <div class="gap-column">
+              <span class="gap-pill"><span class="ico" data-icon="alert-triangle" data-size="14"></span>Trust gap</span>
+              <div class="gap-break" aria-hidden="true">
+                <span></span>
+                <span class="break-icon"><span data-icon="alert-triangle" data-size="24"></span></span>
+                <span></span>
+              </div>
+              <p>No proof path</p>
+            </div>
+
+            <div class="trust-panel decision-panel">
+              <span class="panel-kicker">What the business needs</span>
+              <div class="panel-main">
+                <span class="panel-icon amber"><span data-icon="target"></span></span>
+                <h3>Ready for decision</h3>
+              </div>
+              <p>Clear status: use it, review it, or stop.</p>
+            </div>
+          </div>
+          <p class="caption-row">The gap is the missing proof between a generated output and a business decision.</p>
+        </div>
+      </div>
+
+      <p class="footnote"><span class="goal">Goal</span>Turn generated analysis into a clear status: use it, review it, or stop.</p>
+    </section>
+
+    <section class="s-false-ideal" data-label="03 Chatbox Alone">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="message-circle-question"></span>Starting point</span>
+          <h1 class="title">The ideal interface looks like one chatbox. The real workflow needs more structure.</h1>
+        </div>
+        <p class="lede">The LLM is the engine. The workflow is the control system that makes its output usable.</p>
+      </div>
+
+      <div class="compare-grid">
+        <article class="compare-card ideal">
+          <span class="compare-kicker">Ideal state</span>
+          <h2>Ask once. The model infers everything.</h2>
+          <p>Metric definition, source choice, SQL, data warnings, and business recommendation all arrive correctly in one response.</p>
+          <div class="chat-illustration">
+            <div class="ideal-chat-head">
+              <span class="mini-dot"></span>
+              <span>AI analyst</span>
+            </div>
+            <div class="chat-bubble user">Which asset class should we prioritise?</div>
+            <div class="chat-bubble assistant">
+              <strong>Prioritise crypto.</strong>
+              <span>18.3B IDR completed GTV · 48% share</span>
+            </div>
+            <div class="email-widget">
+              <span class="widget-label">Ready to send</span>
+              <strong>Leadership email draft</strong>
+              <p>Recommend crypto as next month's primary growth lane.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="compare-card reality">
+          <span class="compare-kicker">Production reality</span>
+          <h2>Good answers still need control points.</h2>
+          <p>The model may choose the wrong source, miss a warning, or sound certain when data definitions disagree.</p>
+          <div class="risk-list">
+            <span><span data-icon="database"></span> Wrong table or grain</span>
+            <span><span data-icon="git-fork"></span> Source definition conflict</span>
+            <span><span data-icon="alert-triangle"></span> Hidden warning in a confident answer</span>
+          </div>
+        </article>
+      </div>
+
+    </section>
+
+    <section class="s-workflow" data-label="04 Workflow">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="workflow"></span>What I built</span>
+          <h1 class="title">A workflow that turns analysis into action.</h1>
+        </div>
+        <p class="lede">Every answer must carry a status, source evidence, and the next safe action.</p>
+      </div>
+
+      <div class="workflow-map workflow-canvas">
+        <div class="canvas-topbar">
+          <div class="repo-label">
+            <span data-icon="workflow"></span>
+            <span>trust-analytics / answer workflow</span>
+          </div>
+          <div class="run-status"><span class="status-dot"></span>Read-only SQL · explicit routing</div>
+        </div>
+
+        <div class="canvas-body">
+          <div class="node-row">
+            <article class="workflow-node node-blue">
+              <div class="node-head">
+                <span class="node-icon"><span data-icon="message-circle-question"></span></span>
+                <div>
+                  <span class="node-type">Input</span>
+                  <h3>Ask</h3>
+                </div>
+              </div>
+              <p>"Which asset class should we prioritise?"</p>
+              <div class="node-meta"><span>Plain English</span><span>Business owner</span></div>
+            </article>
+
+            <span class="node-connector"><span></span><span data-icon="arrow-right"></span></span>
+
+            <article class="workflow-node node-teal">
+              <div class="node-head">
+                <span class="node-icon"><span data-icon="scan-search"></span></span>
+                <div>
+                  <span class="node-type">Shape</span>
+                  <h3>Make intent explicit</h3>
+                </div>
+              </div>
+              <p>Asset class · completed GTV · next month promotion</p>
+              <div class="node-meta"><span>Metric</span><span>Period</span><span>Source</span></div>
+            </article>
+
+            <span class="node-connector"><span></span><span data-icon="arrow-right"></span></span>
+
+            <article class="workflow-node node-green">
+              <div class="node-head">
+                <span class="node-icon"><span data-icon="shield-check"></span></span>
+                <div>
+                  <span class="node-type">Validate</span>
+                  <h3>Check the answer</h3>
+                </div>
+              </div>
+              <p>Run SQL, compare sources, surface warnings.</p>
+              <div class="node-meta"><span>Read-only</span><span>QA</span><span>Evidence</span></div>
+            </article>
+
+            <span class="node-connector"><span></span><span data-icon="arrow-right"></span></span>
+
+            <article class="workflow-node node-router">
+              <div class="node-head">
+                <span class="node-icon"><span data-icon="git-branch"></span></span>
+                <div>
+                  <span class="node-type">Route</span>
+                  <h3>Pick the next screen</h3>
+                </div>
+              </div>
+              <p>Trust state becomes a product path.</p>
+              <div class="node-meta"><span>Safe</span><span>Review</span><span>Blocked</span></div>
+            </article>
+          </div>
+
+          <div class="route-output-head">
+            <div>
+              <span class="output-title"><span data-icon="git-branch"></span>Route outputs</span>
+              <p>Each validated answer lands in one product surface.</p>
+            </div>
+          </div>
+
+          <div class="route-grid">
+            <article class="route-card use">
+              <span class="route-icon"><span data-icon="target"></span></span>
+              <div>
+                <span class="route-kicker">Safe · Use it</span>
+                <h3>Decision view</h3>
+                <p>Crypto is ready to recommend, with the warning shown.</p>
+              </div>
+            </article>
+            <article class="route-card review">
+              <span class="route-icon"><span data-icon="microscope"></span></span>
+              <div>
+                <span class="route-kicker">Needs evidence · Review it</span>
+                <h3>Evidence view</h3>
+                <p>Analyst checks SQL, source choice, and QA notes.</p>
+              </div>
+            </article>
+            <article class="route-card stop">
+              <span class="route-icon"><span data-icon="file-warning"></span></span>
+              <div>
+                <span class="route-kicker">Blocked · Stop</span>
+                <h3>Audit handoff</h3>
+                <p>Source conflict blocks the decision until resolved.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="s-route-closeup" data-label="05 Routing Close-up">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="git-branch"></span>Routing close-up</span>
+          <h1 class="title">The workflow does not just answer. It decides where the answer belongs.</h1>
+        </div>
+        <p class="lede">After validation, the product chooses a safe next screen instead of leaving trust as a feeling.</p>
+      </div>
+
+      <div class="routing-closeup">
+        <article class="validated-card">
+          <span class="node-type">Validated answer</span>
+          <h3>Crypto has the strongest completed GTV.</h3>
+          <p>SQL ran, source policy passed, and one warning remains visible.</p>
+          <div class="node-meta"><span>Completed GTV</span><span>October 2025</span><span>Warning shown</span></div>
+        </article>
+
+        <div class="routing-split">
+          <span class="split-chip"><span data-icon="git-branch"></span>Trust state decides the screen</span>
+          <div class="state-track" aria-label="Trust state routes">
+            <span class="state-pill safe"><strong>Safe</strong><small>Use it</small></span>
+            <span class="state-pill review"><strong>Needs evidence</strong><small>Review it</small></span>
+            <span class="state-pill stop"><strong>Blocked</strong><small>Stop</small></span>
+          </div>
+        </div>
+
+        <div class="route-detail-grid">
+          <article class="route-detail use">
+            <div class="route-detail-head">
+              <span class="route-icon"><span data-icon="target"></span></span>
+              <div>
+                <span class="route-kicker">Safe</span>
+                <h3>Use it</h3>
+              </div>
+            </div>
+            <p>Send the business decision view.</p>
+            <div class="route-rule-list">
+              <span><strong>Status</strong> Decision-ready</span>
+              <span><strong>Screen</strong> /analysis</span>
+              <span><strong>Action</strong> Share recommendation</span>
+            </div>
+          </article>
+          <article class="route-detail review">
+            <div class="route-detail-head">
+              <span class="route-icon"><span data-icon="microscope"></span></span>
+              <div>
+                <span class="route-kicker">Needs evidence</span>
+                <h3>Review it</h3>
+              </div>
+            </div>
+            <p>Open SQL, source choice, QA notes.</p>
+            <div class="route-rule-list">
+              <span><strong>Status</strong> Analyst check</span>
+              <span><strong>Screen</strong> /review</span>
+              <span><strong>Action</strong> Verify evidence</span>
+            </div>
+          </article>
+          <article class="route-detail stop">
+            <div class="route-detail-head">
+              <span class="route-icon"><span data-icon="file-warning"></span></span>
+              <div>
+                <span class="route-kicker">Blocked</span>
+                <h3>Stop</h3>
+              </div>
+            </div>
+            <p>Create an audit handoff with owner path.</p>
+            <div class="route-rule-list">
+              <span><strong>Status</strong> Source conflict</span>
+              <span><strong>Screen</strong> /handoff</span>
+              <span><strong>Action</strong> Assign owner</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="s-views" data-label="06 Three Views">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="users"></span>The design decision</span>
+          <h1 class="title">One answer, three user questions.</h1>
+        </div>
+        <p class="lede">This is not one dashboard with more tabs. It is three different answers to three different human needs.</p>
+      </div>
+
+      <div class="cards">
+        <div class="persona blue">
+          <div class="band">
+            <span>Business decision view</span>
+            <span class="ico" data-icon="target"></span>
+          </div>
+          <div class="body">
+            <div class="persona-meta">
+              <span class="ico-mini"><span data-icon="target"></span></span>
+              <span class="label">Decision owner</span>
+            </div>
+            <p class="ask">"Can I act on this?"</p>
+            <p class="desc">Plain-English conclusion, confidence signal, recommended use, boundary, and source warning.</p>
+          </div>
+        </div>
+
+        <div class="persona navy">
+          <div class="band">
+            <span>Analyst evidence view</span>
+            <span class="ico" data-icon="microscope"></span>
+          </div>
+          <div class="body">
+            <div class="persona-meta">
+              <span class="ico-mini"><span data-icon="microscope"></span></span>
+              <span class="label">Data practitioner</span>
+            </div>
+            <p class="ask">"Can I defend this?"</p>
+            <p class="desc">Executed SQL, source rationale, comparison rows, QA layers, and challenge notes.</p>
+          </div>
+        </div>
+
+        <div class="persona amber">
+          <div class="band">
+            <span>Audit handoff view</span>
+            <span class="ico" data-icon="file-warning"></span>
+          </div>
+          <div class="body">
+            <div class="persona-meta">
+              <span class="ico-mini"><span data-icon="file-warning"></span></span>
+              <span class="label">Risk &amp; compliance</span>
+            </div>
+            <p class="ask">"Should this be blocked?"</p>
+            <p class="desc">Explicit hold state, named source conflict, safe interim use, and a resolution checklist.</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <section class="s-proof" data-label="07 Product Proof">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="image"></span>Product surface</span>
+          <h1 class="title">The workflow shows up as decisions, evidence, and escalation.</h1>
+        </div>
+        <p class="lede">The user never receives a raw model answer. They receive a status and a next action.</p>
+      </div>
+
+      <div class="proof-grid">
+        <article class="proof-shot large">
+          <div class="browser compact">
+            <div class="chrome">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <div class="url"><span class="lock"><span data-icon="shield-check" data-size="14"></span></span><span class="host">trust-analytics</span><span class="path">/analysis</span></div>
+              <span class="stage-tag">Decision</span>
+            </div>
+            <div class="frame-body"><img src="img/screenshot-decision.png" alt="Business decision view" /></div>
+          </div>
+          <h3>Decision-ready answer</h3>
+          <p>Recommendation, boundary, warning, and pack actions sit on the same screen.</p>
+        </article>
+
+        <article class="proof-shot">
+          <div class="browser compact">
+            <div class="chrome">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <div class="url"><span class="lock"><span data-icon="shield-check" data-size="14"></span></span><span class="host">trust-analytics</span><span class="path">/review</span></div>
+              <span class="stage-tag">Evidence</span>
+            </div>
+            <div class="frame-body"><img src="img/screenshot-evidence.png" alt="Analyst evidence view" /></div>
+          </div>
+          <h3>Defensible evidence</h3>
+          <p>Source choice, SQL, reconciliation, and QA stay available for challenge.</p>
+        </article>
+
+        <article class="proof-shot">
+          <div class="browser compact">
+            <div class="chrome">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <div class="url"><span class="lock"><span data-icon="shield-check" data-size="14"></span></span><span class="host">trust-analytics</span><span class="path">/handoff</span></div>
+              <span class="stage-tag amber-text">Hold</span>
+            </div>
+            <div class="frame-body"><img src="img/screenshot-audit.png" alt="Audit handoff view" /></div>
+          </div>
+          <h3>Escalation path</h3>
+          <p>When sources disagree, the system blocks leadership packaging and names the next step.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="s-controls" data-label="08 UX As Control System">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="shield-check"></span>Why the workflow improves the model</span>
+          <h1 class="title">Good UX does not decorate the LLM. It narrows the task and exposes uncertainty.</h1>
+        </div>
+        <p class="lede">With the right workflow, even a smaller model can be useful because the product gives it clearer jobs and safer boundaries.</p>
+      </div>
+
+      <div class="control-grid">
+        <article class="control-card">
+          <span class="ico-tile"><span data-icon="scan-search"></span></span>
+          <h3>Question shaping</h3>
+          <p>Turns vague intent into fields the model and SQL layer can use: objective, period, segment, dimension, output.</p>
+          <span class="code-pill">better input</span>
+        </article>
+        <article class="control-card">
+          <span class="ico-tile"><span data-icon="terminal"></span></span>
+          <h3>SQL pre-flight</h3>
+          <p>Checks whether the query matches the question before the result is trusted.</p>
+          <span class="code-pill">fewer wrong answers</span>
+        </article>
+        <article class="control-card">
+          <span class="ico-tile"><span data-icon="git-fork"></span></span>
+          <h3>Source reconciliation</h3>
+          <p>Compares primary and alternative sources so definition conflicts are visible.</p>
+          <span class="code-pill">visible warnings</span>
+        </article>
+        <article class="control-card">
+          <span class="ico-tile"><span data-icon="file-warning"></span></span>
+          <h3>Audit handoff</h3>
+          <p>Stops the workflow when the data is not safe enough for a leadership decision.</p>
+          <span class="code-pill">safer action</span>
+        </article>
+      </div>
+
+    </section>
+
+    <section class="slide-dark s-reflect" data-label="09 Operating Lesson">
+      <div class="head">
+        <span class="eyebrow"><span class="ico" data-icon="lightbulb"></span>Operating lesson</span>
+        <h1 class="title">The product has to earn trust before the analysis can drive action.</h1>
+      </div>
+
+      <div class="points">
+        <div class="point">
+          <span class="num">1</span>
+          <div class="point-body">
+            <h3>Chat is powerful, but it is not the whole interface for trusted data work.</h3>
+            <p>Free-form answers are fast. Decision workflows need explicit status, evidence, and warnings.</p>
+          </div>
+        </div>
+
+        <div class="point">
+          <span class="num">2</span>
+          <div class="point-body">
+            <h3>The best UX makes the model more useful.</h3>
+            <p>Shaping, validation, and source checks reduce ambiguity before the user sees the answer.</p>
+          </div>
+        </div>
+
+        <div class="point">
+          <span class="num">3</span>
+          <div class="point-body">
+            <h3>The workflow transfers beyond this fintech example.</h3>
+            <p>The same pattern applies anywhere AI analysis needs to become a business decision: answer, evidence, action, escalation.</p>
+          </div>
+        </div>
+      </div>
+
+      <p class="bridge">Appendix: implementation details and production design choices.</p>
+    </section>
+
+    <section class="s-appendix s-architecture" data-label="10 Appendix Architecture">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="code"></span>Appendix A</span>
+          <h1 class="title">Core architecture: model output is projected into a controlled product contract.</h1>
+        </div>
+        <p class="lede">The UI does not read raw LLM text. It reads a structured analysis object with status, evidence, warnings, and exports.</p>
+      </div>
+
+      <div class="arch-map">
+        <div class="arch-column">
+          <span class="column-label">Input</span>
+          <article class="arch-node blue"><span data-icon="message-circle-question"></span><strong>Business question</strong><small>Plain-English intent</small></article>
+          <article class="arch-node"><span data-icon="scan-search"></span><strong>Question shaper</strong><small>Fields + clarification needs</small></article>
+        </div>
+        <div class="arch-column">
+          <span class="column-label">Agent chain</span>
+          <article class="arch-node"><span data-icon="map"></span><strong>Planner</strong><small>Metric, grain, source policy</small></article>
+          <article class="arch-node"><span data-icon="terminal"></span><strong>SQL agent</strong><small>Query + derivation trace</small></article>
+          <article class="arch-node"><span data-icon="database"></span><strong>Read-only execution</strong><small>Single statement SELECT/WITH</small></article>
+        </div>
+        <div class="arch-column">
+          <span class="column-label">Trust layer</span>
+          <article class="arch-node green"><span data-icon="shield-check"></span><strong>Pre-flight</strong><small>Intent and source fit</small></article>
+          <article class="arch-node green"><span data-icon="git-fork"></span><strong>Source check</strong><small>Cross-source reconciliation</small></article>
+          <article class="arch-node green"><span data-icon="check-circle"></span><strong>Trust state</strong><small>Status, evidence, warning route</small></article>
+        </div>
+        <div class="arch-column">
+          <span class="column-label">Product contract</span>
+          <article class="arch-node amber"><span data-icon="target"></span><strong>Decision view</strong><small>Use, boundary, warning</small></article>
+          <article class="arch-node navy"><span data-icon="microscope"></span><strong>Evidence view</strong><small>SQL, source, QA, challenge</small></article>
+          <article class="arch-node amber"><span data-icon="file-warning"></span><strong>Audit handoff</strong><small>Blocked action + owner path</small></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="s-appendix s-call-logic" data-label="11 Appendix Call Logic">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="workflow"></span>Appendix B</span>
+          <h1 class="title">Call logic: route every result to the safest next screen.</h1>
+        </div>
+        <p class="lede">A live path is useful only when failure, cache, and audit states are explicit.</p>
+      </div>
+
+      <div class="logic-board">
+        <article class="logic-card">
+          <span class="logic-step">01</span>
+          <h3>Shape request</h3>
+          <p><span class="mono">POST /api/question/shape</span> returns field quality, missing context, and recommended analysis path.</p>
+        </article>
+        <article class="logic-card">
+          <span class="logic-step">02</span>
+          <h3>Run analysis</h3>
+          <p><span class="mono">POST /api/runs</span> starts planner, SQL agent, execution, pre-flight, and QA.</p>
+        </article>
+        <article class="logic-card decision">
+          <span class="logic-step">03</span>
+          <h3>Route by status</h3>
+          <p><strong>Completed</strong> opens the decision pack. <strong>Audit required</strong> opens handoff. <strong>Failed</strong> never pretends to be verified.</p>
+        </article>
+        <article class="logic-card">
+          <span class="logic-step">04</span>
+          <h3>Package output</h3>
+          <p>CSV, email, and PPT outputs inherit the same warnings and evidence appendix.</p>
+        </article>
+      </div>
+
+      <div class="fallback-rule">
+        <span class="ico-tile amber"><span data-icon="alert-triangle"></span></span>
+        <div>
+          <strong>No silent fallback.</strong>
+          <p>If live validation is unavailable, the product can show a verified cached result only when it is labeled as cached and carries the original evidence.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="s-appendix s-guardrails" data-label="12 Appendix Guardrails">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="shield-check"></span>Appendix C</span>
+          <h1 class="title">Production-grade design choices behind the workflow.</h1>
+        </div>
+        <p class="lede">The implementation is intentionally narrow where trust matters and flexible where users need output.</p>
+      </div>
+
+      <div class="guardrail-grid">
+        <article class="guardrail">
+          <span class="guardrail-icon"><span data-icon="database"></span></span>
+          <h3>Read-only SQL</h3>
+          <p>Only SELECT/WITH queries pass. Multiple statements and mutating keywords are blocked.</p>
+          <span class="mono">sql_runner.validate_read_only_sql</span>
+        </article>
+        <article class="guardrail">
+          <span class="guardrail-icon"><span data-icon="scan-search"></span></span>
+          <h3>Pre-flight validation</h3>
+          <p>Checks source, filters, aggregation, and answer shape before QA sees the result.</p>
+          <span class="mono">pre_flight.py</span>
+        </article>
+        <article class="guardrail">
+          <span class="guardrail-icon"><span data-icon="git-fork"></span></span>
+          <h3>Source reconciliation</h3>
+          <p>Compares canonical and alternative sources, then names the disagreement instead of hiding it.</p>
+          <span class="mono">layer_b.py</span>
+        </article>
+        <article class="guardrail">
+          <span class="guardrail-icon"><span data-icon="file-warning"></span></span>
+          <h3>Audit-first failure mode</h3>
+          <p>When the answer is not safe enough, the user gets a handoff path rather than a confident guess.</p>
+          <span class="mono">workflow.py → audit_handoff</span>
+        </article>
+        <article class="guardrail">
+          <span class="guardrail-icon"><span data-icon="presentation"></span></span>
+          <h3>Decision pack export</h3>
+          <p>PPT, CSV, and email outputs carry the same source warning and evidence trail.</p>
+          <span class="mono">portal.make_pptx</span>
+        </article>
+        <article class="guardrail">
+          <span class="guardrail-icon"><span data-icon="refresh-cw"></span></span>
+          <h3>Operational telemetry</h3>
+          <p>API calls and export events are tracked so the workflow can be improved with usage evidence.</p>
+          <span class="mono">telemetry.record_event</span>
+        </article>
+      </div>
+    </section>
+
+  </deck-stage>
+
+  <script src="js/deck-stage.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/pins.js"></script>
+</body>
+</html>

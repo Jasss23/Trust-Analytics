@@ -1,0 +1,70 @@
+/* Trust Analytics Portal design tokens */
+:root {
+  /* Surfaces */
+  --bg-canvas: #F4F6F8;
+  --bg-dark: #0B1220;
+  --bg-dark-elev: #131B2C;
+  --surface: #FFFFFF;
+  --surface-tint-blue: #F5F8FF;
+  --surface-tint-green: #ECFDF3;
+  --surface-tint-amber: #FFFAEB;
+  --surface-tint-purple: #F4EBFF;
+  --surface-tint-slate: #F3F5F8;
+
+  /* Borders */
+  --border-hairline: #E4E7EC;
+  --border-strong: #CFD4DC;
+  --border-dark: #1F2A40;
+
+  /* Text */
+  --text-primary: #0B1220;
+  --text-secondary: #475467;
+  --text-muted: #98A2B3;
+  --text-on-dark: #F4F6F8;
+  --text-on-dark-muted: #8B95A9;
+
+  /* Brand */
+  --accent-blue: #1F4FD8;
+  --accent-blue-deep: #1740B5;
+  --accent-blue-soft: #DCE6FB;
+  --success: #067647;
+  --success-soft: #ECFDF3;
+  --warning: #B54708;
+  --warning-soft: #FFFAEB;
+  --info-purple: #6941C6;
+  --info-purple-soft: #F4EBFF;
+  --teal: #0D9488;
+  --teal-soft: #CCFBF1;
+
+  /* Type scale @ 1920x1080 */
+  --type-eyebrow: 22px;
+  --type-title: 92px;
+  --type-title-sm: 72px;
+  --type-subtitle: 36px;
+  --type-body: 28px;
+  --type-body-lg: 30px;
+  --type-caption: 24px;
+  --type-mono: 22px;
+  --type-mark: 28px;
+
+  /* Padding & gaps */
+  --pad-top: 110px;
+  --pad-bottom: 90px;
+  --pad-x: 120px;
+  --gap-title: 56px;
+  --gap-item: 32px;
+  --gap-tight: 16px;
+
+  /* Radii */
+  --r-pill: 999px;
+  --r-card: 14px;
+  --r-button: 8px;
+
+  /* Letter spacing */
+  --track-eyebrow: 0.18em;
+  --track-tight: -0.015em;
+
+  /* Fonts */
+  --font-sans: "General Sans", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
