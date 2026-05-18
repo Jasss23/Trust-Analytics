@@ -369,27 +369,54 @@
         <div class="trust-pyramid-panel">
           <div class="trust-pyramid-label">Trust stack</div>
           <div class="trust-pyramid">
-            <div class="trust-layer layer-action">
-              <span class="layer-icon"><span data-icon="target"></span></span>
-              <div>
-                <strong>Safe to act</strong>
-                <span>Action</span>
-              </div>
-            </div>
-            <div class="trust-layer layer-evidence">
-              <span class="layer-icon"><span data-icon="microscope"></span></span>
-              <div>
-                <strong>Evidence visible</strong>
-                <span>Defensible answer</span>
-              </div>
-            </div>
-            <div class="trust-layer layer-source">
-              <span class="layer-icon"><span data-icon="git-fork"></span></span>
-              <div>
-                <strong>No source conflict</strong>
-                <span>Base check</span>
-              </div>
-            </div>
+            <svg class="trust-pyramid-svg" viewBox="0 0 900 430" role="img" aria-label="Trust stack pyramid: no source conflict, evidence visible, safe to act">
+              <defs>
+                <linearGradient id="trustBaseFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#FFF3F0" />
+                  <stop offset="1" stop-color="#FFDCD2" />
+                </linearGradient>
+                <linearGradient id="trustEvidenceFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#F4F6FA" />
+                  <stop offset="1" stop-color="#D8DFEA" />
+                </linearGradient>
+                <linearGradient id="trustActionFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#EEF4FF" />
+                  <stop offset="1" stop-color="#BFD0FF" />
+                </linearGradient>
+              </defs>
+
+              <path class="pyramid-shadow" d="M450 18 L835 410 L65 410 Z" />
+              <polygon class="pyramid-layer base" points="171,302 729,302 835,410 65,410" />
+              <polygon class="pyramid-layer evidence" points="280,192 620,192 729,302 171,302" />
+              <polygon class="pyramid-layer action" points="450,18 620,192 280,192" />
+              <polyline class="pyramid-outline" points="450,18 835,410 65,410 450,18" />
+              <line class="pyramid-cut" x1="280" y1="192" x2="620" y2="192" />
+              <line class="pyramid-cut" x1="171" y1="302" x2="729" y2="302" />
+
+              <g class="pyramid-axis">
+                <line x1="42" y1="398" x2="42" y2="92" />
+                <polyline points="34,102 42,90 50,102" />
+                <text x="26" y="250" transform="rotate(-90 26 250)">trust builds upward</text>
+              </g>
+
+              <g class="pyramid-copy action-copy">
+                <text class="pyramid-index" x="450" y="88">03</text>
+                <text class="pyramid-title" x="450" y="120">Safe to act</text>
+                <text class="pyramid-sub" x="450" y="150">Decision-ready output</text>
+              </g>
+
+              <g class="pyramid-copy evidence-copy">
+                <text class="pyramid-index" x="450" y="222">02</text>
+                <text class="pyramid-title" x="450" y="250">Evidence visible</text>
+                <text class="pyramid-sub" x="450" y="280">SQL, source, QA path</text>
+              </g>
+
+              <g class="pyramid-copy base-copy">
+                <text class="pyramid-index" x="450" y="340">01</text>
+                <text class="pyramid-title" x="450" y="368">No source conflict</text>
+                <text class="pyramid-sub" x="450" y="398">Sources agree enough to continue</text>
+              </g>
+            </svg>
           </div>
         </div>
 
