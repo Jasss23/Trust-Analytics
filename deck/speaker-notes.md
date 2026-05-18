@@ -80,19 +80,19 @@ Make the state machine feel practical.
 
 Transition: "Once I had that routing model, the UI split became obvious."
 
-## Slide 6: Three Views
+## Slide 6: Trust Layers
 
 Frame this as the main design decision.
 
-"The same analysis needs to answer three different human questions."
+"The routing decision creates a simple trust stack."
 
-"The business owner asks: can I act on this? They need a plain-English conclusion, the boundary, and the warning."
+"The base layer is source conflict. If finance and operations disagree, the product should not ask the user to judge from a raw model answer. It should create an audit handoff."
 
-"The analyst asks: can I defend this? They need SQL, source rationale, reconciliation, QA, and challenge notes."
+"The next layer is evidence. If the answer can be checked, the analyst needs SQL, source rationale, QA, and challenge notes."
 
-"Risk or compliance asks: should this be blocked? They need the conflict, the owner path, and the resolution checklist."
+"The top layer is action. Only after conflict is cleared and evidence is visible should the product package the answer for a business decision."
 
-"This is why I did not build one dashboard with more tabs. I built different product surfaces for different trust states."
+"That is why this is not one dashboard with more tabs. The trust state decides the view: audit handoff, evidence view, or decision view."
 
 Transition: "Then I turned those surfaces into the working product."
 

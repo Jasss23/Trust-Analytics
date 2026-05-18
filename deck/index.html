@@ -21,7 +21,7 @@
   "Frame chat as the ideal starting point, then explain why production analytics needs control points around the model.",
   "Present the workflow as a control system: ask, shape, validate, route. The model does not just return text; the product creates a safe next action.",
   "Zoom into routing. A validated answer becomes a trust state: safe, needs evidence, or blocked.",
-  "Explain the main design decision: one analysis needs three product surfaces because three users ask different trust questions.",
+  "Explain the main design decision: trust is built in layers. First clear source conflict, then expose evidence, then make action safe.",
   "Use the screenshots as product proof: the workflow appears as decision, evidence, and escalation screens.",
   "Make the thesis explicit: the interface is part of the control system around the model.",
   "Close the main story: trusted AI analytics needs answer, evidence, action, and escalation.",
@@ -356,59 +356,79 @@
       </div>
     </section>
 
-    <section class="s-views" data-label="06 Three Views">
+    <section class="s-views" data-label="06 Trust Layers">
       <div class="head split">
         <div>
           <span class="eyebrow"><span class="ico" data-icon="users"></span>The design decision</span>
-          <h1 class="title">One answer, three user questions.</h1>
+          <h1 class="title">Trust state decides the screen.</h1>
         </div>
-        <p class="lede">This is not one dashboard with more tabs. It is three different answers to three different human needs.</p>
+        <p class="lede">Source conflict first. Evidence next. Action last. Each trust state routes the same answer to a different product surface.</p>
       </div>
 
-      <div class="cards">
-        <div class="persona blue">
-          <div class="band">
-            <span>Business decision view</span>
-            <span class="ico" data-icon="target"></span>
-          </div>
-          <div class="body">
-            <div class="persona-meta">
-              <span class="ico-mini"><span data-icon="target"></span></span>
-              <span class="label">Decision owner</span>
+      <div class="trust-stack">
+        <div class="trust-pyramid-panel">
+          <div class="trust-pyramid-label">Trust stack</div>
+          <div class="trust-pyramid">
+            <div class="trust-layer layer-action">
+              <span class="layer-icon"><span data-icon="target"></span></span>
+              <div>
+                <strong>Safe to act</strong>
+                <span>Action</span>
+              </div>
             </div>
-            <p class="ask">"Can I act on this?"</p>
-            <p class="desc">Plain-English conclusion, confidence signal, recommended use, boundary, and source warning.</p>
+            <div class="trust-layer layer-evidence">
+              <span class="layer-icon"><span data-icon="microscope"></span></span>
+              <div>
+                <strong>Evidence visible</strong>
+                <span>Defensible answer</span>
+              </div>
+            </div>
+            <div class="trust-layer layer-source">
+              <span class="layer-icon"><span data-icon="git-fork"></span></span>
+              <div>
+                <strong>No source conflict</strong>
+                <span>Base check</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="persona navy">
-          <div class="band">
-            <span>Analyst evidence view</span>
-            <span class="ico" data-icon="microscope"></span>
-          </div>
-          <div class="body">
-            <div class="persona-meta">
-              <span class="ico-mini"><span data-icon="microscope"></span></span>
-              <span class="label">Data practitioner</span>
+        <div class="trust-route-stack">
+          <article class="trust-route-card action">
+            <div class="trust-route-head">
+              <span class="trust-route-icon"><span data-icon="target"></span></span>
+              <div>
+                <span>Action</span>
+                <h3>Business decision view</h3>
+              </div>
             </div>
-            <p class="ask">"Can I defend this?"</p>
-            <p class="desc">Executed SQL, source rationale, comparison rows, QA layers, and challenge notes.</p>
-          </div>
-        </div>
+            <p>Plain-English conclusion, boundary, and source warning.</p>
+            <strong>"Can I act on this?"</strong>
+          </article>
 
-        <div class="persona amber">
-          <div class="band">
-            <span>Audit handoff view</span>
-            <span class="ico" data-icon="file-warning"></span>
-          </div>
-          <div class="body">
-            <div class="persona-meta">
-              <span class="ico-mini"><span data-icon="file-warning"></span></span>
-              <span class="label">Risk &amp; compliance</span>
+          <article class="trust-route-card evidence">
+            <div class="trust-route-head">
+              <span class="trust-route-icon"><span data-icon="microscope"></span></span>
+              <div>
+                <span>Evidence</span>
+                <h3>Analyst evidence view</h3>
+              </div>
             </div>
-            <p class="ask">"Should this be blocked?"</p>
-            <p class="desc">Explicit hold state, named source conflict, safe interim use, and a resolution checklist.</p>
-          </div>
+            <p>Executed SQL, source rationale, QA, and challenge notes.</p>
+            <strong>"Can I defend this?"</strong>
+          </article>
+
+          <article class="trust-route-card blocked">
+            <div class="trust-route-head">
+              <span class="trust-route-icon"><span data-icon="file-warning"></span></span>
+              <div>
+                <span>Escalation</span>
+                <h3>Audit handoff view</h3>
+              </div>
+            </div>
+            <p>Named conflict, hold state, owner path, and resolution checklist.</p>
+            <strong>"Should this be blocked?"</strong>
+          </article>
         </div>
       </div>
 
