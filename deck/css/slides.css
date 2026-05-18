@@ -2321,3 +2321,13 @@
   border-bottom-width: 2px;
   border-radius: 4px;
 }
+
+@media print {
+  section *,
+  section *::before,
+  section *::after {
+    box-shadow: none !important;
+    filter: none !important;
+    text-shadow: none !important;
+  }
+}
