@@ -23,7 +23,7 @@
   "Zoom into routing. A validated answer becomes a trust state: safe, needs evidence, or blocked.",
   "Explain the main design decision: one analysis needs three product surfaces because three users ask different trust questions.",
   "Use the screenshots as product proof: the workflow appears as decision, evidence, and escalation screens.",
-  "Make the thesis explicit: UX is not decoration. It narrows the model task and exposes uncertainty.",
+  "Make the thesis explicit: the interface is part of the control system around the model.",
   "Close the main story: trusted AI analytics needs answer, evidence, action, and escalation.",
   "Appendix A: show that the UI reads a structured product contract, not raw LLM prose.",
   "Appendix B: show the call path and emphasise explicit cache, failure, and audit states.",
@@ -469,7 +469,7 @@
       <div class="head split">
         <div>
           <span class="eyebrow"><span class="ico" data-icon="shield-check"></span>Why the workflow improves the model</span>
-          <h1 class="title">Good UX does not decorate the LLM. It narrows the task and exposes uncertainty.</h1>
+          <h1 class="title">A structured interface narrows the task and exposes uncertainty.</h1>
         </div>
         <p class="lede">With the right workflow, even a smaller model can be useful because the product gives it clearer jobs and safer boundaries.</p>
       </div>
@@ -521,7 +521,7 @@
         <div class="point">
           <span class="num">2</span>
           <div class="point-body">
-            <h3>The best UX makes the model more useful.</h3>
+            <h3>The workflow makes the model more useful.</h3>
             <p>Shaping, validation, and source checks reduce ambiguity before the user sees the answer.</p>
           </div>
         </div>
@@ -535,7 +535,7 @@
         </div>
       </div>
 
-      <p class="bridge">Appendix: implementation details and production design choices.</p>
+      <p class="bridge">Appendix: implementation details and production guardrails.</p>
     </section>
 
     <section class="s-appendix s-architecture" data-label="10 Appendix Architecture">
@@ -619,7 +619,7 @@
       <div class="head split">
         <div>
           <span class="eyebrow"><span class="ico" data-icon="shield-check"></span>Appendix C</span>
-          <h1 class="title">Production-grade design choices behind the workflow.</h1>
+          <h1 class="title">Production guardrails that make the workflow trustworthy.</h1>
         </div>
         <p class="lede">The implementation is intentionally narrow where trust matters and flexible where users need output.</p>
       </div>

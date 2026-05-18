@@ -4,7 +4,7 @@
 
 The story is not "I built a dashboard."
 
-The story is: I had the same problem many business teams have with AI analytics. AI can produce SQL, charts, and confident recommendations, but people still hesitate to act because they cannot see the proof path. I turned that trust problem into a product workflow. The workflow gives every AI-generated answer a clear status, the evidence behind it, and the next safe action. The key lesson is that UX is not decoration around the LLM. UX is part of how we make the LLM useful.
+The story is: I had the same problem many business teams have with AI analytics. AI can produce SQL, charts, and confident recommendations, but people still hesitate to act because they cannot see the proof path. I turned that trust problem into a product workflow. The workflow gives every AI-generated answer a clear status, the evidence behind it, and the next safe action. The key lesson is that a structured interface is part of how we make the LLM useful.
 
 ## Timing
 
@@ -110,19 +110,19 @@ Use screenshots as evidence, not decoration.
 
 "So the workflow is not abstract. It becomes decisions, evidence, and escalation."
 
-Transition: "The deeper lesson is that UX changes how useful the model can be."
+Transition: "The deeper lesson is that workflow design changes how useful the model can be."
 
-## Slide 8: UX As Control System
+## Slide 8: Interface As Control System
 
 Make the thesis explicit.
 
 "A common way to think about AI product work is: the model gets smarter, the UI gets simpler."
 
-"I think that is only half true. In high-trust workflows, good UX actually improves model performance because it narrows the task."
+"I think that is only half true. In high-trust workflows, the interface improves model performance because it narrows the task."
 
 "Question shaping gives the model clearer inputs. SQL pre-flight catches mismatches before users see the result. Source reconciliation makes disagreement visible. Audit handoff stops confident guesses from becoming business decisions."
 
-"That is why UX and LLM quality are connected. A smaller or older model can still be useful if the workflow gives it the right job and the right boundaries."
+"That is why interface design and LLM quality are connected. A smaller or older model can still be useful if the workflow gives it the right job and the right boundaries."
 
 Transition: "So the operating lesson is bigger than this fintech case."
 
@@ -134,11 +134,11 @@ Close the main story.
 
 "Chat is powerful, but it is not the whole interface for trusted data work."
 
-"The best UX makes the model more useful by reducing ambiguity before the answer reaches the user."
+"The workflow makes the model more useful by reducing ambiguity before the answer reaches the user."
 
 "And the pattern transfers. Anywhere AI analysis needs to become a business decision, the product needs answer, evidence, action, and escalation."
 
-"That is the main story. The appendix shows how I made it production-grade."
+"That is the main story. The appendix shows the guardrails that make it reliable enough to use."
 
 Transition: "I can quickly show the technical design behind it."
 
@@ -168,7 +168,7 @@ Emphasise explicit failure and fallback.
 
 "That is important because fallback is often where trust quietly breaks."
 
-Transition: "Finally, these are the guardrails that make it production-grade rather than just a prototype."
+Transition: "Finally, these are the guardrails that make the workflow reliable rather than just impressive."
 
 ## Slide 12: Appendix C, Guardrails
 
