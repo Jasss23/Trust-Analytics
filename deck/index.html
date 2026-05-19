@@ -19,15 +19,19 @@
   "Start with the trust question: AI can produce analysis, but can the business safely act on it?",
   "Use the multi-asset promotion example to make the trust gap concrete: SQL and charts are useful, but teams still need table, transaction, and source checks.",
   "Frame chat as the ideal starting point, then explain why production analytics needs control points around the model.",
+  "Show the operating change: before, people manually investigated whether an AI answer was safe; after, the workflow turns those checks into product states and routes.",
   "Present the workflow as a control system: ask, shape, validate, route. The model does not just return text; the product creates a safe next action.",
   "Zoom into routing. A validated answer becomes a trust state: safe, needs evidence, or blocked.",
   "Explain the main design decision: trust is built in layers. First clear source conflict, then expose evidence, then make action safe.",
   "Use the screenshots as product proof: the workflow appears as decision, evidence, and escalation screens.",
-  "Make the thesis explicit: the interface is part of the control system around the model.",
+  "Make the thesis explicit: the interface is part of the control system around the model, which makes AI output safer to use.",
   "Close the main story: trusted AI analytics needs answer, evidence, action, and escalation.",
-  "Appendix A: show that the UI reads a structured product contract, not raw LLM prose.",
-  "Appendix B: show the call path and emphasise explicit cache, failure, and audit states.",
-  "Appendix C: show production guardrails: read-only SQL, pre-flight, source reconciliation, audit-first failure, exports, and telemetry."
+  "Appendix A: show the frontend design workflow: Image GPT variants, critique, implementation, screenshot QA.",
+  "Appendix B: show what worked and what did not work.",
+  "Appendix C: show that the UI reads a structured product contract, not raw LLM prose.",
+  "Appendix D: show the call path and emphasise explicit cache, failure, and audit states.",
+  "Appendix E: show production guardrails: read-only SQL, pre-flight, source reconciliation, audit-first failure, exports, and telemetry.",
+  "Close with presenter context: Jiashun Pang, prepared for Tomoro AI."
 ]
   </script>
 </head>
@@ -43,7 +47,7 @@
           <span class="logo"><span data-icon="shield-check"></span></span>
           <span>Trust Analytics</span>
         </div>
-        <span class="meta-pill"><span class="dot"></span>Trusted data decisions</span>
+        <span class="meta-pill"><span class="dot"></span>Prepared for Tomoro AI</span>
       </div>
 
       <div class="hero">
@@ -168,7 +172,44 @@
 
     </section>
 
-    <section class="s-workflow" data-label="04 Workflow">
+    <section class="s-before-after" data-label="04 Before After Workflow">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="workflow"></span>Before / after workflow</span>
+          <h1 class="title">The workflow is designed to help people work differently with AI answers.</h1>
+        </div>
+        <p class="lede">The key shift is from manual trust investigation to explicit product states.</p>
+      </div>
+
+      <div class="before-after-grid">
+        <article class="workflow-lane before">
+          <div class="lane-head">
+            <span class="lane-label">Before</span>
+            <h2>People inspect the answer after the fact.</h2>
+          </div>
+          <div class="lane-steps">
+            <div><span>01</span><strong>Ask AI for analysis</strong><p>Plain-English question becomes SQL and chart.</p></div>
+            <div><span>02</span><strong>Manually check trust</strong><p>Which table, which transaction state, which source definition?</p></div>
+            <div><span>03</span><strong>Decide with hidden risk</strong><p>The answer moves into Slack, email, or a slide without a clear state.</p></div>
+          </div>
+        </article>
+
+        <article class="workflow-lane after">
+          <div class="lane-head">
+            <span class="lane-label">After</span>
+            <h2>The workflow turns trust checks into product states.</h2>
+          </div>
+          <div class="lane-steps">
+            <div><span>01</span><strong>Shape the question</strong><p>Metric, period, segment, source policy, and output are explicit.</p></div>
+            <div><span>02</span><strong>Validate the data path</strong><p>Read-only SQL, pre-flight checks, and source reconciliation run before packaging.</p></div>
+            <div><span>03</span><strong>Route the answer</strong><p>Decision-ready, evidence-needed, or blocked becomes the next screen.</p></div>
+          </div>
+        </article>
+      </div>
+
+    </section>
+
+    <section class="s-workflow" data-label="05 Workflow">
       <div class="head split">
         <div>
           <span class="eyebrow"><span class="ico" data-icon="workflow"></span>What I built</span>
@@ -280,7 +321,7 @@
       </div>
     </section>
 
-    <section class="s-route-closeup" data-label="05 Routing Close-up">
+    <section class="s-route-closeup" data-label="06 Routing Close-up">
       <div class="head split">
         <div>
           <span class="eyebrow"><span class="ico" data-icon="git-branch"></span>Routing close-up</span>
@@ -356,7 +397,7 @@
       </div>
     </section>
 
-    <section class="s-views" data-label="06 Trust Layers">
+    <section class="s-views" data-label="07 Trust Layers">
       <div class="head split">
         <div>
           <span class="eyebrow"><span class="ico" data-icon="users"></span>The design decision</span>
@@ -461,13 +502,13 @@
 
     </section>
 
-    <section class="s-proof" data-label="07 Product Proof">
+    <section class="s-proof" data-label="08 Product Proof">
       <div class="head split">
         <div>
           <span class="eyebrow"><span class="ico" data-icon="image"></span>Product surface</span>
           <h1 class="title">The workflow shows up as decisions, evidence, and escalation.</h1>
         </div>
-        <p class="lede">The user never receives a raw model answer. They receive a status and a next action.</p>
+        <p class="lede">The user never receives a raw model answer. They receive a product state: decision-ready, evidence-needed, or blocked.</p>
       </div>
 
       <div class="proof-grid">
@@ -510,12 +551,14 @@
           <p>When sources disagree, the system blocks leadership packaging and names the next step.</p>
         </article>
       </div>
+
+      <p class="product-disclaimer"><span>Boundary</span>Working demo built on committed synthetic fintech data. No client or production data is used. If live validation is unavailable, the result is shown only as a labeled verified cache.</p>
     </section>
 
-    <section class="s-controls" data-label="08 UX As Control System">
+    <section class="s-controls" data-label="09 AI Output Safety">
       <div class="head split">
         <div>
-          <span class="eyebrow"><span class="ico" data-icon="shield-check"></span>Why the workflow improves the model</span>
+          <span class="eyebrow"><span class="ico" data-icon="shield-check"></span>Why the workflow makes AI output safer to use</span>
           <h1 class="title">A structured interface narrows the task and exposes uncertainty.</h1>
         </div>
         <p class="lede">With the right workflow, even a smaller model can be useful because the product gives it clearer jobs and safer boundaries.</p>
@@ -550,7 +593,7 @@
 
     </section>
 
-    <section class="slide-dark s-reflect" data-label="09 Operating Lesson">
+    <section class="slide-dark s-reflect" data-label="10 Operating Lesson">
       <div class="head">
         <span class="eyebrow"><span class="ico" data-icon="lightbulb"></span>Operating lesson</span>
         <h1 class="title">The product has to earn trust before the analysis can drive action.</h1>
@@ -582,13 +625,93 @@
         </div>
       </div>
 
-      <p class="bridge">Appendix: implementation details and production guardrails.</p>
+      <p class="bridge">Appendix: design process, lessons learned, implementation details, and production guardrails.</p>
     </section>
 
-    <section class="s-appendix s-architecture" data-label="10 Appendix Architecture">
+    <section class="s-appendix s-tool-process" data-label="11 Appendix Tool Process">
       <div class="head split">
         <div>
-          <span class="eyebrow"><span class="ico" data-icon="code"></span>Appendix A</span>
+          <span class="eyebrow"><span class="ico" data-icon="sparkles"></span>Appendix A</span>
+          <h1 class="title">Try a new tool: use Image GPT variants to accelerate frontend direction.</h1>
+        </div>
+        <p class="lede">The frontend process was: generate multiple visual directions, critique them together, then implement the chosen parts in code.</p>
+      </div>
+
+      <div class="variant-board">
+        <article class="variant-shot">
+          <img src="img/variant-a.png" alt="Image GPT frontend mockup variant A" />
+          <span>Variant A</span>
+        </article>
+        <article class="variant-shot">
+          <img src="img/variant-b.png" alt="Image GPT frontend mockup variant B" />
+          <span>Variant B</span>
+        </article>
+        <article class="variant-shot selected">
+          <img src="img/variant-c.png" alt="Image GPT frontend mockup variant C" />
+          <span>Variant C</span>
+        </article>
+        <article class="variant-shot">
+          <img src="img/variant-d.png" alt="Image GPT frontend mockup variant D" />
+          <span>Variant D</span>
+        </article>
+      </div>
+
+      <div class="design-loop">
+        <span><strong>Generate</strong>Image GPT mockups</span>
+        <span><strong>Critique</strong>Layout, density, trust cues</span>
+        <span><strong>Build</strong>React/CSS product routes</span>
+        <span><strong>Verify</strong>Browser screenshots and PDF export</span>
+      </div>
+    </section>
+
+    <section class="s-appendix s-lessons" data-label="12 Appendix Lessons">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="list-checks"></span>Appendix B</span>
+          <h1 class="title">What worked, and what did not.</h1>
+        </div>
+        <p class="lede">The useful lesson is not that AI can make charts. It is where product structure helps AI become usable.</p>
+      </div>
+
+      <div class="lessons-grid">
+        <article class="lesson-panel worked">
+          <div class="lesson-panel-head">
+            <span class="lesson-badge"><span data-icon="check-circle"></span></span>
+            <div>
+              <span class="lesson-label">Worked</span>
+              <h2>Keep these design choices</h2>
+            </div>
+          </div>
+          <div class="lesson-list">
+            <p><span class="lesson-tag">State</span><strong>Trust state as the center.</strong> Decision-ready, evidence-needed, and blocked made the product easier to reason about.</p>
+            <p><span class="lesson-tag">Screen</span><strong>Separate screens by user need.</strong> Business users get action; analysts get evidence; risk gets escalation.</p>
+            <p><span class="lesson-tag">Fallback</span><strong>Explicit cached fallback.</strong> A verified cached result is useful only when it is labeled as cached.</p>
+            <p><span class="lesson-tag">Process</span><strong>Visual variants helped.</strong> Image-generated mockups made layout taste concrete before implementation.</p>
+          </div>
+        </article>
+
+        <article class="lesson-panel not-worked">
+          <div class="lesson-panel-head">
+            <span class="lesson-badge"><span data-icon="x-circle"></span></span>
+            <div>
+              <span class="lesson-label">Did not work</span>
+              <h2>Do not rely on these</h2>
+            </div>
+          </div>
+          <div class="lesson-list">
+            <p><span class="lesson-tag">Chat</span><strong>Chatbox-only UX.</strong> It looked simple, but it hid source choice, warnings, and next action.</p>
+            <p><span class="lesson-tag">Model</span><strong>Letting the LLM infer everything.</strong> The model needed shaped inputs and validation boundaries.</p>
+            <p><span class="lesson-tag">Evidence</span><strong>Raw SQL in the first screen.</strong> It made the business view feel less usable and less decision-focused.</p>
+            <p><span class="lesson-tag">Visual</span><strong>Overly decorative diagrams.</strong> If structure does not carry meaning, the slide feels polished but not persuasive.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="s-appendix s-architecture" data-label="13 Appendix Architecture">
+      <div class="head split">
+        <div>
+          <span class="eyebrow"><span class="ico" data-icon="code"></span>Appendix C</span>
           <h1 class="title">Core architecture: model output is projected into a controlled product contract.</h1>
         </div>
         <p class="lede">The UI does not read raw LLM text. It reads a structured analysis object with status, evidence, warnings, and exports.</p>
@@ -621,10 +744,10 @@
       </div>
     </section>
 
-    <section class="s-appendix s-call-logic" data-label="11 Appendix Call Logic">
+    <section class="s-appendix s-call-logic" data-label="14 Appendix Call Logic">
       <div class="head split">
         <div>
-          <span class="eyebrow"><span class="ico" data-icon="workflow"></span>Appendix B</span>
+          <span class="eyebrow"><span class="ico" data-icon="workflow"></span>Appendix D</span>
           <h1 class="title">Call logic: route every result to the safest next screen.</h1>
         </div>
         <p class="lede">A live path is useful only when failure, cache, and audit states are explicit.</p>
@@ -662,10 +785,10 @@
       </div>
     </section>
 
-    <section class="s-appendix s-guardrails" data-label="12 Appendix Guardrails">
+    <section class="s-appendix s-guardrails" data-label="15 Appendix Guardrails">
       <div class="head split">
         <div>
-          <span class="eyebrow"><span class="ico" data-icon="shield-check"></span>Appendix C</span>
+          <span class="eyebrow"><span class="ico" data-icon="shield-check"></span>Appendix E</span>
           <h1 class="title">Production guardrails that make the workflow trustworthy.</h1>
         </div>
         <p class="lede">The implementation is intentionally narrow where trust matters and flexible where users need output.</p>
@@ -708,6 +831,36 @@
           <p>API calls and export events are tracked so the workflow can be improved with usage evidence.</p>
           <span class="mono">telemetry.record_event</span>
         </article>
+      </div>
+    </section>
+
+    <section class="slide-dark s-cover s-contact" data-label="16 Jiashun Pang">
+      <div class="backdrop"></div>
+      <span class="ico glyph" data-icon="shield-check" data-size="720" aria-hidden="true"></span>
+
+      <div class="brand-row">
+        <div class="brand">
+          <span class="logo"><span data-icon="shield-check"></span></span>
+          <span>Trust Analytics</span>
+        </div>
+        <span class="meta-pill"><span class="dot"></span>Prepared for Tomoro AI</span>
+      </div>
+
+      <div class="hero">
+        <span class="eyebrow"><span class="ico" data-icon="workflow"></span>AI workflow design</span>
+        <h1>Trust Analytics<br /><span class="accent">Workflow</span></h1>
+        <p class="sub">A focused trust workflow for AI-generated analysis.</p>
+      </div>
+
+      <div class="footer">
+        <div class="footline">
+          <span class="author">Prepared by Jiashun Pang with Codex</span>
+          <span class="sep">→</span>
+          <span>Synthetic fintech data</span>
+          <span class="sep">→</span>
+          <span>May 2026</span>
+        </div>
+        <span class="arrow"><span>For Tomoro AI</span><span class="ico" data-icon="sparkles" data-size="18"></span></span>
       </div>
     </section>
 

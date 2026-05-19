@@ -8,8 +8,9 @@ The story is: I had the same problem many business teams have with AI analytics.
 
 ## Timing
 
-- Main story, slides 1 to 9: 7 to 9 minutes.
-- Technical appendix, slides 10 to 12: 3 to 5 minutes, or use only if asked.
+- Main story, slides 1 to 10: 9 to 11 minutes.
+- Appendix, slides 11 to 15: 4 to 6 minutes, or use only if asked.
+- Final slide 16 is the leave-behind identity page.
 - Do not read the slide title first. Open each slide with the reason it matters.
 
 ## Slide 1: Trust Analytics Workflow
@@ -50,9 +51,23 @@ Make the tension clear.
 
 "So I stopped treating chat as the whole product. I treated the LLM as the engine, and designed a workflow around it."
 
-Transition: "Here is the workflow I built around that engine."
+Transition: "The easiest way to see the design change is to compare the old work pattern with the new one."
 
-## Slide 4: Workflow Overview
+## Slide 4: Before / After Workflow
+
+Frame this as work redesign, not UI decoration.
+
+"Before the workflow, the AI answer still created work for the human. Someone had to ask: which table did it use, did it include pending transactions, and do the sources agree?"
+
+"The workflow is designed to move those questions into product steps. Shape the question, validate the data path, and route the answer by state."
+
+"The real change is that trust checking moves from an informal human habit into the product itself."
+
+"One important boundary: all data in this deck is synthetic fintech data committed in the repo. I am showing the workflow pattern, not using client or production data."
+
+Transition: "Here is the workflow I built around that idea."
+
+## Slide 5: Workflow Overview
 
 Do not explain every card. Explain the control system.
 
@@ -66,7 +81,7 @@ Do not explain every card. Explain the control system.
 
 Transition: "The routing decision is the part I would spend the most time on with a client."
 
-## Slide 5: Routing Close-Up
+## Slide 6: Routing Close-Up
 
 Make the state machine feel practical.
 
@@ -80,7 +95,7 @@ Make the state machine feel practical.
 
 Transition: "Once I had that routing model, the UI split became obvious."
 
-## Slide 6: Trust Layers
+## Slide 7: Trust Layers
 
 Frame this as the main design decision.
 
@@ -96,11 +111,11 @@ Frame this as the main design decision.
 
 Transition: "Then I turned those surfaces into the working product."
 
-## Slide 7: Product Proof
+## Slide 8: Product Proof
 
 Use screenshots as evidence, not decoration.
 
-"These are the actual product surfaces that come out of the workflow."
+"These are the actual product surfaces that come out of the workflow. The user never receives a raw model answer. They receive a product state: decision-ready, evidence-needed, or blocked."
 
 "The decision view packages the recommendation in business language. It still carries the warning and the boundary, so it is not overselling the result."
 
@@ -110,15 +125,17 @@ Use screenshots as evidence, not decoration.
 
 "So the workflow is not abstract. It becomes decisions, evidence, and escalation."
 
-Transition: "The deeper lesson is that workflow design changes how useful the model can be."
+"Boundary: this is a working demo on committed synthetic fintech data. It is not connected to client or production data, and cached fallback is labeled."
 
-## Slide 8: Interface As Control System
+Transition: "The deeper lesson is why this workflow makes AI output safer to use."
+
+## Slide 9: AI Output Safety
 
 Make the thesis explicit.
 
 "A common way to think about AI product work is: the model gets smarter, the UI gets simpler."
 
-"I think that is only half true. In high-trust workflows, the interface improves model performance because it narrows the task."
+"I think that is only half true. In high-trust workflows, the interface makes AI output safer to use because it narrows the task."
 
 "Question shaping gives the model clearer inputs. SQL pre-flight catches mismatches before users see the result. Source reconciliation makes disagreement visible. Audit handoff stops confident guesses from becoming business decisions."
 
@@ -126,7 +143,7 @@ Make the thesis explicit.
 
 Transition: "So the operating lesson is bigger than this fintech case."
 
-## Slide 9: Operating Lesson
+## Slide 10: Operating Lesson
 
 Close the main story.
 
@@ -138,11 +155,37 @@ Close the main story.
 
 "And the pattern transfers. Anywhere AI analysis needs to become a business decision, the product needs answer, evidence, action, and escalation."
 
-"That is the main story. The appendix shows the guardrails that make it reliable enough to use."
+"That is the main story. The appendix shows how it was designed, what I learned, and the guardrails that make it reliable enough to use."
 
-Transition: "I can quickly show the technical design behind it."
+Transition: "I can quickly show the design process and the technical design behind it."
 
-## Slide 10: Appendix A, Architecture
+## Slide 11: Appendix A, Try A New Tool
+
+Use this as build-process evidence.
+
+"I also tried a new frontend design workflow. I used Image GPT to generate several mockup directions, then we critiqued the variants together."
+
+"The useful part was not copying a mockup. It was making visual tradeoffs concrete: density, hierarchy, status language, trust cues, and how much enterprise seriousness the product needed."
+
+"After choosing the useful parts, I implemented the frontend in React and CSS, then verified it with browser screenshots and PDF export."
+
+Transition: "The process worked in some places and failed in others."
+
+## Slide 12: Appendix B, What Worked / What Did Not
+
+Make the learning practical.
+
+"What worked was making trust state the center of the product. Once we had decision-ready, evidence-needed, and blocked, the rest of the UI had a reason to exist."
+
+"The separate screens also worked. The business user, analyst, and risk user need different views of the same answer."
+
+"What did not work was pretending chat alone could carry the whole workflow. It hid too much of the source choice and warning logic."
+
+"Another thing that did not work was decorative diagrams. If the structure does not carry meaning, the slide looks polished but does not convince."
+
+Transition: "Now I can show how the implementation supports that product structure."
+
+## Slide 13: Appendix C, Architecture
 
 Use this only if the audience wants implementation depth.
 
@@ -156,7 +199,7 @@ Use this only if the audience wants implementation depth.
 
 Transition: "The call logic is where this contract becomes behavior."
 
-## Slide 11: Appendix B, Call Logic
+## Slide 14: Appendix D, Call Logic
 
 Emphasise explicit failure and fallback.
 
@@ -170,7 +213,7 @@ Emphasise explicit failure and fallback.
 
 Transition: "Finally, these are the guardrails that make the workflow reliable rather than just impressive."
 
-## Slide 12: Appendix C, Guardrails
+## Slide 15: Appendix E, Guardrails
 
 End with build credibility.
 
@@ -181,6 +224,12 @@ End with build credibility.
 "Exports carry the same warnings and evidence trail, so trust does not disappear when the answer becomes a CSV, email, or slide. Telemetry tracks usage so the workflow can improve."
 
 "The design is narrow where trust matters and flexible where users need output."
+
+## Slide 16: Jiashun Pang
+
+Use this as the leave-behind page.
+
+"This deck was prepared for Tomoro AI. The work is a focused example of how I think about AI workflow design: understand the human trust problem, build the product path, and keep the implementation honest about its boundaries."
 
 ## Final Close
 
