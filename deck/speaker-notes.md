@@ -179,9 +179,11 @@ Make the learning practical.
 
 "The separate screens also worked. The business user, analyst, and risk user need different views of the same answer."
 
+"The explicit fallback also worked because cached analysis stayed useful only when it was labeled and kept its evidence trail. The warning had to travel with the answer into CSV, email, and PPT."
+
 "What did not work was pretending chat alone could carry the whole workflow. It hid too much of the source choice and warning logic."
 
-"Another thing that did not work was decorative diagrams. If the structure does not carry meaning, the slide looks polished but does not convince."
+"Raw SQL in the first business screen also did not work. It made the answer feel less usable. And silent fallback would break the whole trust promise, because the user would not know whether the answer was live-validated or cached."
 
 Transition: "Now I can show how the implementation supports that product structure."
 

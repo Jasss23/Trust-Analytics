@@ -2375,7 +2375,7 @@
   gap: 42px;
 }
 .s-tool-process {
-  gap: 34px;
+  gap: 38px;
 }
 .s-appendix .head.split .lede { max-width: 560px; }
 .s-tool-process .title,
@@ -2384,7 +2384,7 @@
 .variant-board {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
+  gap: 22px;
 }
 .variant-shot {
   background:
@@ -2394,9 +2394,9 @@
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   box-shadow: 0 22px 56px -42px rgba(11,18,32,0.58);
-  min-height: 250px;
+  min-height: 332px;
 }
 .variant-shot.selected {
   border-color: #5E7EE8;
@@ -2406,7 +2406,7 @@
 }
 .variant-shot img {
   width: 100%;
-  height: 210px;
+  height: 282px;
   object-fit: cover;
   object-position: top left;
   border-radius: 10px;
@@ -2426,22 +2426,23 @@
 .design-loop {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-top: 0;
+  gap: 22px;
+  margin-top: 6px;
 }
 .design-loop span {
   background: #FFFFFF;
   border: 1px solid var(--border-hairline);
   border-radius: var(--r-card);
-  padding: 16px 18px;
+  padding: 24px 24px;
   color: var(--text-secondary);
-  font-size: 17px;
+  font-size: 19px;
   line-height: 1.32;
+  min-height: 94px;
 }
 .design-loop strong {
   display: block;
   color: var(--text-primary);
-  font-size: 21px;
+  font-size: 24px;
   letter-spacing: -0.01em;
   margin-bottom: 4px;
 }
@@ -2455,10 +2456,10 @@
 }
 .lesson-panel {
   border-radius: var(--r-card);
-  padding: 28px;
+  padding: 34px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 24px;
   border: 1px solid #26334A;
   box-shadow: 0 22px 56px -42px rgba(11,18,32,0.58);
 }
@@ -2523,27 +2524,33 @@
 }
 .lesson-list {
   display: grid;
-  gap: 12px;
+  gap: 18px;
+  flex: 1;
+  grid-template-rows: repeat(4, 1fr);
 }
 .lesson-list p {
   position: relative;
   margin: 0;
   color: #AAB4C8;
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1.38;
-  padding: 14px 16px 14px 104px;
+  padding: 20px 22px 20px 116px;
   border-radius: 12px;
   background: rgba(16,24,39,0.82);
   border: 1px solid #26334A;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .lesson-panel.worked .lesson-list p { border-color: rgba(125,211,167,0.20); }
 .lesson-panel.not-worked .lesson-list p { border-color: rgba(251,186,116,0.22); }
 .lesson-tag {
   position: absolute;
-  left: 14px;
-  top: 16px;
-  width: 70px;
-  height: 25px;
+  left: 18px;
+  top: 50%;
+  width: 78px;
+  height: 28px;
+  transform: translateY(-50%);
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -2567,9 +2574,9 @@
 .lesson-list strong {
   display: block;
   color: #F4F6F8;
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: -0.01em;
-  margin-bottom: 3px;
+  margin-bottom: 6px;
 }
 
 .arch-map {
