@@ -1487,6 +1487,9 @@
 }
 .workflow-lane.before {
   border-top: 6px solid #98A2B3;
+  background:
+    linear-gradient(180deg, #182132 0%, #101827 100%);
+  border-color: #26334A;
 }
 .workflow-lane.after {
   border-top: 6px solid var(--accent-blue);
@@ -1510,6 +1513,12 @@
   line-height: 1.12;
   letter-spacing: -0.015em;
 }
+.workflow-lane.before h2 {
+  color: #F4F6F8;
+}
+.workflow-lane.before .lane-label {
+  color: #8D99AF;
+}
 .lane-steps {
   display: grid;
   gap: 16px;
@@ -1523,6 +1532,10 @@
   border-radius: 13px;
   background: #F8FAFC;
   border: 1px solid var(--border-hairline);
+}
+.workflow-lane.before .lane-steps div {
+  background: rgba(11,18,32,0.62);
+  border-color: #2B3B58;
 }
 .workflow-lane.after .lane-steps div {
   background: #F5F8FF;
@@ -1541,15 +1554,26 @@
   background: #FFFFFF;
   border: 1px solid var(--border-hairline);
 }
+.workflow-lane.before .lane-steps span {
+  color: #AAB4C8;
+  background: #101827;
+  border-color: #2B3B58;
+}
 .lane-steps strong {
   font-size: 22px;
   color: var(--text-primary);
+}
+.workflow-lane.before .lane-steps strong {
+  color: #F4F6F8;
 }
 .lane-steps p {
   margin: 0;
   font-size: 19px;
   line-height: 1.35;
   color: var(--text-secondary);
+}
+.workflow-lane.before .lane-steps p {
+  color: #AAB4C8;
 }
 .data-note {
   margin: 0;
